@@ -1,0 +1,12 @@
+# chatapp/ngrok.yml
+version: "2"
+authtoken: 3AhrPFLzoJvg4gSHsqXdHMf6Ewq_ZcuBvCNP8TRugdeLs5BR
+# authtoken is already saved globally via `ngrok config add-authtoken`
+# but you can override here for team sharing using "authtoken: YOUR_TOKEN_HERE"
+
+tunnels:
+  backend:
+    proto: http
+    addr: 4000
+    # Optional: reserved domain if you're on paid plan
+    # hostname: your-app.ngrok.app

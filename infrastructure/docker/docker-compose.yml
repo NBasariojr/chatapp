@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ../../apps/backend
+      dockerfile: Dockerfile
+    ports:
+      - '4000:4000'
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - MONGO_URI=${MONGO_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    volumes:
+      - ../../apps/backend/src:/app/src
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    ports:
+      - '3000:80'
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:

@@ -1,0 +1,41 @@
+{
+    "name": "chatapp-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "packageManager": "pnpm@8.15.0",
+    "workspaces": [
+        "packages/shared",
+        "apps/*"
+    ],
+    "scripts": {
+        "dev": "pnpm -r --parallel dev",
+        "dev:web": "pnpm --filter web dev",
+        "dev:backend": "pnpm --filter backend dev",
+        "dev:desktop": "pnpm --filter desktop dev",
+        "dev:mobile": "pnpm --filter mobile start",
+        "build": "pnpm -r build",
+        "build:web": "pnpm --filter web build",
+        "build:backend": "pnpm --filter backend build",
+        "build:desktop": "pnpm --filter desktop build",
+        "lint": "pnpm -r lint",
+        "typecheck": "pnpm -r exec tsc --noEmit",
+        "clean": "pnpm -r exec rimraf node_modules dist",
+        "docker:up": "docker-compose -f infrastructure/docker/docker-compose.yml up --build",
+        "docker:down": "docker-compose -f infrastructure/docker/docker-compose.yml down",
+        "tree": "node scripts/generate-tree.js --ignore=node_modules,dist,.git",
+        "tree:save": "node scripts/generate-tree.js --ignore=node_modules,dist,.git --output=structure.md",
+        "tree:depth": "node scripts/generate-tree.js --ignore=node_modules,dist,.git --depth=3",
+        "tree:web": "node scripts/generate-tree.js --only=apps/web --ignore=node_modules,dist,.git",
+        "tree:backend": "node scripts/generate-tree.js --only=apps/backend --ignore=node_modules,dist,.git",
+        "tree:mobile": "node scripts/generate-tree.js --only=apps/mobile --ignore=node_modules,dist,.git",
+        "tree:desktop": "node scripts/generate-tree.js --only=apps/desktop --ignore=node_modules,dist,.git",
+        "tree:packages": "node scripts/generate-tree.js --only=packages --ignore=node_modules,dist,.git",
+        "tree:web+backend": "node scripts/generate-tree.js --only=apps/web,apps/backend --ignore=node_modules,dist,.git",
+        "tunnel": "pwsh -File scripts/ngrok-start.ps1",
+        "tunnel:inspect": "start http://localhost:4040",
+        "dev:tunneled": "pnpm tunnel & pnpm dev:backend & pnpm dev:web"
+    },
+    "devDependencies": {
+        "rimraf": "^6.1.3"
+    }
+}
