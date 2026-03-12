@@ -1,4 +1,3 @@
-// backend/src/middlewares/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/user.model';
@@ -17,7 +16,6 @@ export const authenticate = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
-
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({ success: false, message: 'No token provided' });
       return;
@@ -25,18 +23,33 @@ export const authenticate = async (
 
     const token = authHeader.split(' ')[1];
     const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error('JWT_SECRET is not configured');
 
-    if (!secret) {
-      throw new Error('JWT_SECRET is not configured');
-    }
+    // iat is needed for the passwordChangedAt stale-token check below
+    const decoded = jwt.verify(token, secret) as { id: string; role: string; iat: number };
 
-    const decoded = jwt.verify(token, secret) as { id: string; role: string };
-
-    const user = await User.findById(decoded.id).select('_id role');
+    // Fetch passwordChangedAt alongside the fields auth middleware already needs
+    const user = await User.findById(decoded.id).select('_id role passwordChangedAt');
     if (!user) {
       res.status(401).json({ success: false, message: 'User not found' });
       return;
     }
+
+    // ─── Stale-JWT guard ───────────────────────────────────────────────────
+    // If the user changed their password after this token was issued, reject it.
+    // This is the Redis-independent fallback that guarantees session invalidation
+    // even when the pub/sub force-logout event could not be delivered.
+    if (user.passwordChangedAt) {
+      const changedTimestamp = Math.floor(user.passwordChangedAt.getTime() / 1000);
+      if (decoded.iat < changedTimestamp) {
+        res.status(401).json({
+          success: false,
+          message: 'Password recently changed. Please log in again.',
+        });
+        return;
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────
 
     req.user = { _id: user._id.toString(), role: user.role };
     next();
@@ -55,7 +68,6 @@ export const requireRole = (...roles: string[]) => {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
-
     if (!roles.includes(req.user.role)) {
       res.status(403).json({
         success: false,
@@ -63,7 +75,6 @@ export const requireRole = (...roles: string[]) => {
       });
       return;
     }
-
     next();
   };
 };

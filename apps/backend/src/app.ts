@@ -28,7 +28,8 @@ app.use(helmet());
 // CORS
 const allowedOrigins = [
   process.env.CLIENT_URL || 'http://localhost:3000',
-  process.env.NGROK_URL,        // auto-set by ngrok-start.ps1
+  process.env.NGROK_URL,
+  'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5173',

@@ -4,11 +4,11 @@ import { useSelector } from "react-redux";
 import type { RootState } from "./redux/store";
 
 // Shared chat pages (copy or symlink from web/src/pages)
-import Login from "./pages/login";
-import Register from "./pages/register";
-import ChatDashboard from "./pages/chat-dashboard";
-import GroupChatManagement from "./pages/group-chat-management";
-import UserProfileSettings from "./pages/user-profile-settings";
+import Login from "./pages/LoginPage";
+import Register from "./pages/RegisterPage";
+import ChatDashboard from "./pages/ChatPage";
+import GroupChatManagement from "./pages/GroupChatManagement";
+import UserProfileSettings from "./pages/UserProfileSettings";
 
 // Admin-only pages (desktop exclusive)
 import AdminLayout from "./admin/AdminLayout";

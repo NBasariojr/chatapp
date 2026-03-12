@@ -1,15 +1,16 @@
 import React from "react";
 import { BrowserRouter, Routes as RouterRoutes, Route, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import ScrollToTop from "../src/components/ScrollToTop";
-import ErrorBoundary from "../src/components/ErrorBoundary";
-import NotFound from "../src/pages/NotFound";
-import Login from "../src/pages/login";
-import Register from "../src/pages/register";
-import ChatDashboard from "../src/pages/chat-dashboard";
-import GroupChatManagement from "../src/pages/group-chat-management";
-import UserProfileSettings from "../src/pages/user-profile-settings";
-import type { RootState } from "../src/redux/store";
+import ScrollToTop from "./components/ScrollToTop";
+import ErrorBoundary from "./components/ErrorBoundary";
+import NotFound from "./pages/NotFound";
+import Login from "./pages/login";
+import Register from "./pages/register";
+import ForgotPassword from "./pages/forgot-password";
+import ChatDashboard from "./pages/chat-dashboard";
+import GroupChatManagement from "./pages/group-chat-management";
+import UserProfileSettings from "./pages/user-profile-settings";
+import type { RootState } from "./redux/store";
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { token } = useSelector((state: RootState) => state.auth);
@@ -33,6 +34,7 @@ const Routes = () => {
           {/* Public */}
           <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
 
           {/* Protected */}
           <Route path="/chat-dashboard"       element={<PrivateRoute><ChatDashboard /></PrivateRoute>} />

@@ -34,7 +34,7 @@ interface ActiveSession {
 
 interface AccountSecurityProps {
   currentUser: User | null;
-  onUpdateSecurity: (data: { 
+  onUpdateSecurity: (data: {
     type: 'password' | 'twoFactor' | 'terminateSession';
     data: { newPassword?: string; enabled?: boolean; sessionId?: number }
   }) => void;
@@ -88,7 +88,7 @@ const AccountSecurity: React.FC<AccountSecurityProps> = ({ currentUser, onUpdate
       ...prev,
       [field]: value
     }));
-    
+
     // Clear error when user starts typing
     if (errors?.[field]) {
       setErrors(prev => ({
@@ -100,11 +100,11 @@ const AccountSecurity: React.FC<AccountSecurityProps> = ({ currentUser, onUpdate
 
   const validatePasswordForm = (): boolean => {
     const newErrors: Errors = {};
-    
+
     if (!passwordData?.currentPassword) {
       newErrors.currentPassword = 'Current password is required';
     }
-    
+
     if (!passwordData?.newPassword) {
       newErrors.newPassword = 'New password is required';
     } else if (passwordData?.newPassword?.length < 8) {
@@ -112,13 +112,13 @@ const AccountSecurity: React.FC<AccountSecurityProps> = ({ currentUser, onUpdate
     } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(passwordData?.newPassword)) {
       newErrors.newPassword = 'Password must contain uppercase, lowercase, and number';
     }
-    
+
     if (!passwordData?.confirmPassword) {
       newErrors.confirmPassword = 'Please confirm your new password';
     } else if (passwordData?.newPassword !== passwordData?.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors)?.length === 0;
   };
@@ -131,7 +131,7 @@ const AccountSecurity: React.FC<AccountSecurityProps> = ({ currentUser, onUpdate
         type: 'password',
         data: { newPassword: passwordData?.newPassword }
       });
-      
+
       setPasswordData({
         currentPassword: '',
         newPassword: '',
@@ -205,7 +205,6 @@ const AccountSecurity: React.FC<AccountSecurityProps> = ({ currentUser, onUpdate
                   <AppIcon name={showPasswords?.current ? "EyeOff" : "Eye"} size={16} />
                 </button>
               </div>
-              
               <div className="relative">
                 <Input
                   label="New Password"
@@ -224,7 +223,7 @@ const AccountSecurity: React.FC<AccountSecurityProps> = ({ currentUser, onUpdate
                   <AppIcon name={showPasswords?.new ? "EyeOff" : "Eye"} size={16} />
                 </button>
               </div>
-              
+
               <div className="relative">
                 <Input
                   label="Confirm New Password"
@@ -242,7 +241,7 @@ const AccountSecurity: React.FC<AccountSecurityProps> = ({ currentUser, onUpdate
                   <AppIcon name={showPasswords?.confirm ? "EyeOff" : "Eye"} size={16} />
                 </button>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4">
                 <Button
                   variant="outline"
@@ -314,10 +313,10 @@ const AccountSecurity: React.FC<AccountSecurityProps> = ({ currentUser, onUpdate
               <div key={session?.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <div className="flex items-center space-x-4">
                   <div className="flex-shrink-0 w-10 h-10 bg-secondary rounded-full flex items-center justify-center">
-                    <AppIcon 
-                      name={session?.device?.includes('iPhone') ? "Smartphone" : 
-                            session?.device?.includes('Android') ? "Smartphone" : "Monitor"} 
-                      size={20} 
+                    <AppIcon
+                      name={session?.device?.includes('iPhone') ? "Smartphone" :
+                            session?.device?.includes('Android') ? "Smartphone" : "Monitor"}
+                      size={20}
                     />
                   </div>
                   <div>

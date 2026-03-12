@@ -1,19 +1,27 @@
-import React, { useState } from "react";
-import Button from "components/ui/Button";
-import Input from "components/ui/Input";
-import { Checkbox } from "components/ui/Checkbox";
-import Icon from "components/AppIcon";
+import React, { useState } from 'react';
+import Button from 'components/ui/Button';
+import Input from 'components/ui/Input';
+import { Checkbox } from 'components/ui/Checkbox';
+import Icon from 'components/AppIcon';
 
 interface LoginFormProps {
   onLogin: (data: { email: string; password: string; rememberMe: boolean }) => void;
+  onForgotPassword: () => void;
   isLoading: boolean;
   error?: string;
+  passwordRequirements?: {
+    minLength?: number;
+    requireUppercase?: boolean;
+    requireLowercase?: boolean;
+    requireNumbers?: boolean;
+    requireSpecialChars?: boolean;
+  };
 }
 
-const LoginForm = ({ onLogin, isLoading, error }: LoginFormProps) => {
+const LoginForm = ({ onLogin, onForgotPassword, isLoading, error, passwordRequirements }: LoginFormProps) => {
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
+    email: '',
+    password: '',
     rememberMe: false,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -22,25 +30,49 @@ const LoginForm = ({ onLogin, isLoading, error }: LoginFormProps) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === 'checkbox' ? checked : value,
     }));
     if (formErrors[name]) {
-      setFormErrors((prev) => ({ ...prev, [name]: "" }));
+      setFormErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!formData.email.trim()) {
-      errors.email = "Email is required";
+    if (formData.email.trim() === '') {
+      errors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = "Please enter a valid email address";
+      errors.email = 'Please enter a valid email address';
     }
-    if (!formData.password.trim()) {
-      errors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      errors.password = "Password must be at least 6 characters";
+
+    // Password validation with configurable requirements
+    if (formData.password.trim() === '') {
+      errors.password = 'Password is required';
+    } else {
+      const requirements = passwordRequirements || { minLength: 6 };
+      const password = formData.password;
+
+      if (requirements.minLength && password.length < requirements.minLength) {
+        errors.password = `Password must be at least ${requirements.minLength} characters`;
+      }
+
+      if (requirements.requireUppercase && !/[A-Z]/.test(password)) {
+        errors.password = 'Password must contain at least one uppercase letter';
+      }
+
+      if (requirements.requireLowercase && !/[a-z]/.test(password)) {
+        errors.password = 'Password must contain at least one lowercase letter';
+      }
+
+      if (requirements.requireNumbers && !/\d/.test(password)) {
+        errors.password = 'Password must contain at least one number';
+      }
+
+      if (requirements.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+        errors.password = 'Password must contain at least one special character';
+      }
     }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -96,6 +128,7 @@ const LoginForm = ({ onLogin, isLoading, error }: LoginFormProps) => {
         />
         <button
           type="button"
+          onClick={onForgotPassword}
           className="text-sm text-primary hover:text-primary/80 transition-colors duration-200 focus:outline-none focus:underline"
           disabled={isLoading}
         >

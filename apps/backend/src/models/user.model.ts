@@ -1,4 +1,3 @@
-// backend/src/models/user.model.ts
 import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -13,6 +12,11 @@ export interface IUser extends Document {
   friends: mongoose.Types.ObjectId[];
   friendRequestsSent: mongoose.Types.ObjectId[];
   friendRequestsReceived: mongoose.Types.ObjectId[];
+  // ─── Password reset fields ──────────────────────────────────────────────
+  passwordResetToken?: string;  // SHA-256 hash of the raw token; select: false
+  passwordResetExpires?: Date;  // TTL for the token; select: false
+  passwordChangedAt?: Date;     // Set on every password change; used by auth middleware
+  // ────────────────────────────────────────────────────────────────────────
   comparePassword(candidate: string): Promise<boolean>;
 }
 
@@ -57,24 +61,33 @@ const userSchema = new Schema<IUser>(
       type: Date,
       default: Date.now,
     },
-    friends: [{
-      type: Schema.Types.ObjectId,
-      ref: 'User'
-    }],
-    friendRequestsSent: [{
-      type: Schema.Types.ObjectId,
-      ref: 'User'
-    }],
-    friendRequestsReceived: [{
-      type: Schema.Types.ObjectId,
-      ref: 'User'
-    }],
+    friends: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    friendRequestsSent: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    friendRequestsReceived: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+
+    // ─── Password reset fields ──────────────────────────────────────────────
+    passwordResetToken: {
+      type: String,
+      select: false, // Never returned by normal queries — only fetched explicitly
+    },
+    passwordResetExpires: {
+      type: Date,
+      select: false,
+    },
+    passwordChangedAt: {
+      type: Date,
+      default: undefined,
+      // Not select:false — auth middleware needs this on every authenticated request
+    },
+    // ────────────────────────────────────────────────────────────────────────
   },
   {
     timestamps: true,
     toJSON: {
       transform: (_doc, ret) => {
-        delete ret.password; // Never expose password
+        delete ret.password;
+        delete ret.passwordResetToken;
+        delete ret.passwordResetExpires;
         return ret;
       },
     },
@@ -97,5 +110,7 @@ userSchema.methods.comparePassword = async function (candidate: string): Promise
 
 // Indexes
 userSchema.index({ isOnline: 1 });
+// sparse: true because most users won't have this field set at any given time
+userSchema.index({ passwordResetToken: 1 }, { sparse: true });
 
 export const User = mongoose.model<IUser>('User', userSchema);

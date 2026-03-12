@@ -1,0 +1,41 @@
+"use strict";
+const n = require("electron"),
+  o = require("node:path"),
+  a = process.env.NODE_ENV === "development";
+let e = null;
+const t = () => {
+  ((e = new n.BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    webPreferences: {
+      preload: o.join(__dirname, "preload.js"),
+      contextIsolation: !0,
+      nodeIntegration: !1,
+    },
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    show: !1,
+  })),
+    a
+      ? (e.loadURL("http://localhost:3001"), e.webContents.openDevTools())
+      : e.loadFile(o.join(__dirname, "../dist/index.html")),
+    e.once("ready-to-show", () => {
+      e == null || e.show();
+    }),
+    e.webContents.setWindowOpenHandler(
+      ({ url: l }) => (n.shell.openExternal(l), { action: "deny" }),
+    ),
+    e.on("closed", () => {
+      e = null;
+    }));
+};
+n.app.whenReady().then(t);
+n.app.on("window-all-closed", () => {
+  process.platform !== "darwin" && n.app.quit();
+});
+n.app.on("activate", () => {
+  n.BrowserWindow.getAllWindows().length === 0 && t();
+});
+n.ipcMain.handle("app:version", () => n.app.getVersion());
+n.ipcMain.handle("app:platform", () => process.platform);

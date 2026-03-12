@@ -339,7 +339,6 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
                     <span className="text-sm">Saving changes...</span>
                   </div>
                 )}
-                
                 {renderTabContent()}
               </div>
             </div>
