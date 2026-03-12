@@ -1,16 +1,23 @@
-// web/src/services/socket.service.ts
 import { io, Socket } from 'socket.io-client';
 import { store } from '../redux/store';
 import { addMessage, setTyping, updateUserStatus } from '../redux/slices/chatSlice';
 import type { Message } from '@chatapp/shared';
 
-// Connect to current page origin — Vite proxy forwards /socket.io/* to localhost:4000
-// On desktop: connects to http://localhost:3000 → proxied to localhost:4000
-// On mobile via ngrok: connects to https://xxx.ngrok-free.dev → proxied to localhost:4000
-// This means no separate backend tunnel is needed for mobile web
-const SOCKET_URL = globalThis.window === undefined
-  ? 'http://localhost:3000'
-  : globalThis.window.location.origin;
+// ─── Socket URL resolution ────────────────────────────────────────────────────
+//
+// Dev:  VITE_API_URL is unset → falls back to localhost:4000
+//       Socket connects directly to the local backend
+//
+// Prod: VITE_API_URL = https://chatapp-backend.onrender.com (set in Vercel dashboard)
+//       Socket connects directly to Render backend
+//
+// WHY NOT window.location.origin:
+//   On Vercel, window.location.origin = https://your-app.vercel.app
+//   Vercel is a static file host — it has no WebSocket server.
+//   Socket.IO would get a 404 and fail silently on every connection attempt.
+//   All real-time features (messages, typing, presence) would be broken.
+//
+const SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
 let socket: Socket | null = null;
 

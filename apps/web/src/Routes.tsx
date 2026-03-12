@@ -7,6 +7,7 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/login";
 import Register from "./pages/register";
 import ForgotPassword from "./pages/forgot-password";
+import ResetPassword from "./pages/reset-password";
 import ChatDashboard from "./pages/chat-dashboard";
 import GroupChatManagement from "./pages/group-chat-management";
 import UserProfileSettings from "./pages/user-profile-settings";
@@ -34,10 +35,11 @@ const Routes = () => {
           {/* Public */}
           <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+          <Route path="/forgot-password"       element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+          <Route path="/reset-password/:token" element={<PublicRoute><ResetPassword /></PublicRoute>} />
 
           {/* Protected */}
-          <Route path="/chat-dashboard"       element={<PrivateRoute><ChatDashboard /></PrivateRoute>} />
+          <Route path="/chat-dashboard"        element={<PrivateRoute><ChatDashboard /></PrivateRoute>} />
           <Route path="/group-chat-management" element={<PrivateRoute><GroupChatManagement /></PrivateRoute>} />
           <Route path="/user-profile-settings" element={<PrivateRoute><UserProfileSettings currentUser={currentUser} /></PrivateRoute>} />
 
