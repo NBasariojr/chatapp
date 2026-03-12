@@ -4,9 +4,9 @@ import type { Room, Message, RoomSettings, UserRole, Media } from '@chatapp/shar
 import { store } from '../redux/store';
 import { logout } from '../redux/slices/authSlice';
 
-// Use relative base URL — Vite proxy forwards /api/* to localhost:4000
-// This works for both desktop (localhost:3000) and mobile (via ngrok tunnel on port 3000)
-const client = axios.create({ baseURL: '/' });
+const client = axios.create({
+  baseURL: import.meta.env.VITE_API_URL ?? '/',
+});
 
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem('chatapp_token');
