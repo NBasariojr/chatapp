@@ -1,4 +1,4 @@
-// web/vite.config.ts
+// apps/web/vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -9,33 +9,60 @@ export default defineConfig({
     react(),
     tsconfigPaths(),
   ],
+
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
+
+  // Bundle Splitting
+  build: {
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core — almost never changes between your deploys
+          'vendor-react': ['react', 'react-dom'],
+
+          // Routing
+          'vendor-router': ['react-router-dom'],
+
+          // Redux + state management
+          'vendor-redux': ['@reduxjs/toolkit', 'react-redux'],
+
+          // Google OAuth library
+          'vendor-oauth': ['@react-oauth/google'],
+
+          // Socket.IO client
+          'vendor-socket': ['socket.io-client'],
+
+          // UI utilities (zod, etc.)
+          'vendor-utils': ['zod'],
+        },
+      },
+    },
+  },
+
+  // Dev Server (unchanged from your original)
   server: {
     host: true,
     port: 3000,
     allowedHosts: [
       'localhost',
-      '.ngrok-free.dev',  // free tier
-      '.ngrok-free.app',  // free tier alternate
-      '.ngrok.app',       // paid plans
+      '.ngrok-free.dev',
+      '.ngrok-free.app',
+      '.ngrok.app',
     ],
     proxy: {
-      // HTTP API calls → backend
       '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
       },
-      // Socket.IO WebSocket → backend
-      // This is the key fix for mobile: socket connects to ngrok:3000,
-      // Vite proxies it server-side to localhost:4000
       '/socket.io': {
         target: 'http://localhost:4000',
         changeOrigin: true,
-        ws: true,  // ← enable WebSocket proxying
+        ws: true,
       },
     },
   },
