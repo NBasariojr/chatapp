@@ -3,8 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import * as Sentry from '@sentry/node';
-
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import roomRoutes from './routes/room.routes';
@@ -14,15 +12,41 @@ import adminRoutes from './routes/admin.routes';
 import { errorHandler } from './middlewares/error.middleware';
 import { notFound } from './middlewares/notFound.middleware';
 
-const app: Application = express();
-
-// Sentry init (no-op if DSN not set)
+// Optional Sentry integration
+let Sentry: any = null;
 if (process.env.SENTRY_DSN) {
-  Sentry.init({ dsn: process.env.SENTRY_DSN });
-  app.use(Sentry.Handlers.requestHandler());
+  try {
+    // Dynamic require — no compile-time failure if package is absent
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Sentry = require('@sentry/node');
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV ?? 'development',
+      beforeSend(event: Record<string, unknown>) {
+        // Scrub sensitive OAuth fields from captured request data
+        const req = event.request as Record<string, unknown> | undefined;
+        if (req?.data) {
+          const data = req.data as Record<string, unknown>;
+          const SENSITIVE_FIELDS = ['code', 'accessToken', 'idToken', 'id_token', 'access_token'];
+          for (const field of SENSITIVE_FIELDS) {
+            if (field in data) data[field] = '[REDACTED]';
+          }
+        }
+        return event;
+      },
+    });
+  } catch {
+    console.warn('[app] @sentry/node not installed — error monitoring disabled. Run: pnpm add @sentry/node --filter @chatapp/backend');
+    Sentry = null;
+  }
 }
 
 // Security headers
+const app: Application = express();
+
+// Sentry request handler must come before all routes
+if (Sentry) app.use(Sentry.Handlers.requestHandler());
+
 app.use(helmet());
 
 // CORS
@@ -41,7 +65,6 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-
       if (
         allowedOrigins.some(
           (o) =>
@@ -52,7 +75,6 @@ app.use(
       ) {
         return callback(null, true);
       }
-
       console.warn(`🚫 HTTP CORS blocked origin: ${origin}`);
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
@@ -69,7 +91,7 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Rate limiting — 100 requests per 15 min per IP
+// Global rate limiter — 100 req / 15 min / IP
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -90,15 +112,11 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Sentry error handler
-if (process.env.SENTRY_DSN) {
-  app.use(Sentry.Handlers.errorHandler());
-}
+// Sentry error handler (must come before custom error handler)
+if (Sentry) app.use(Sentry.Handlers.errorHandler());
 
-// 404 handler
+// 404 + global error handler
 app.use(notFound);
-
-// Global error handler
 app.use(errorHandler);
 
 export default app;

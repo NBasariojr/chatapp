@@ -13,9 +13,19 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-export const authService = {
-  // ─── Existing methods (unchanged) ────────────────────────────────────────
+// Normalize API errors into plain Error objects carrying the backend's message.
+// This ensures rejectWithValue in thunks always receives a clean string.
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const message =
+      error.response?.data?.message ?? error.message ?? 'An unexpected error occurred';
+    return Promise.reject(new Error(message));
+  }
+);
 
+export const authService = {
+  // Local Auth
   login: async (credentials: { email: string; password: string }): Promise<AuthUser> => {
     const res = await client.post('/api/auth/login', credentials);
     return { ...res.data.data.user, token: res.data.data.token };
@@ -39,10 +49,8 @@ export const authService = {
     await client.post('/api/auth/logout');
   },
 
-  // ─── Password reset ───────────────────────────────────────────────────────
-
+  // Password Reset
   forgotPassword: async (email: string): Promise<void> => {
-    // Always resolves — backend returns generic message whether the email exists or not
     await client.post('/api/auth/forgot-password', { email });
   },
 
@@ -57,5 +65,11 @@ export const authService = {
     confirmPassword: string
   ): Promise<void> => {
     await client.post(`/api/auth/reset-password/${token}`, { password, confirmPassword });
+  },
+
+  // Google OAuth
+  googleSignIn: async (code: string): Promise<AuthUser> => {
+    const res = await client.post('/api/auth/google', { code });
+    return { ...res.data.data.user, token: res.data.data.token };
   },
 };

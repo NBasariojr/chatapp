@@ -1,22 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import type { AppDispatch, RootState } from 'redux/store';
-import { login, clearError } from 'redux/slices/authSlice';
-import { connectSocket } from 'services/socket.service';
-import LoginForm from './components/LoginForm';
-import OAuthButtons from '../../components/ui/OAuthButtons';
-import LoginHeader from './components/LoginHeader';
-import LoginFooter from './components/LoginFooter';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import type { AppDispatch, RootState } from "redux/store";
+import { login, clearError } from "redux/slices/authSlice";
+import { connectSocket } from "services/socket.service";
+import LoginForm from "./components/LoginForm";
+import OAuthButtons from "../../components/ui/OAuthButtons";
+import LoginHeader from "./components/LoginHeader";
+import LoginFooter from "./components/LoginFooter";
 
 const Login = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { token, isLoading, error } = useSelector((state: RootState) => state.auth);
-  const [oauthError, setOauthError] = useState('');
+  const { token, isLoading, error } = useSelector(
+    (state: RootState) => state.auth,
+  );
+  const [oauthError, setOauthError] = useState("");
 
   useEffect(() => {
-    if (token) navigate('/chat-dashboard');
+    if (token) navigate("/chat-dashboard");
   }, [token, navigate]);
 
   useEffect(() => {
@@ -30,21 +32,23 @@ const Login = () => {
     password: string;
     rememberMe: boolean;
   }) => {
-    setOauthError('');
-    await dispatch(login({ email: formData.email, password: formData.password })).unwrap();
-    const storedToken = localStorage.getItem('chatapp_token');
+    setOauthError("");
+    await dispatch(
+      login({ email: formData.email, password: formData.password }),
+    ).unwrap();
+    const storedToken = localStorage.getItem("chatapp_token");
     if (storedToken) connectSocket(storedToken);
-    navigate('/chat-dashboard');
+    navigate("/chat-dashboard");
   };
 
   const handleOAuthLogin = async (provider: string) => {
-    setOauthError(`${provider} login is not available yet.`);
+    setOauthError("");
   };
 
-  const handleNavigateToRegister = () => navigate('/register');
+  const handleNavigateToRegister = () => navigate("/register");
 
   // Navigate to the forgot-password page
-  const handleForgotPassword = () => navigate('/forgot-password');
+  const handleForgotPassword = () => navigate("/forgot-password");
 
   const displayError = error || oauthError;
 

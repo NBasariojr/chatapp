@@ -1,26 +1,6 @@
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
 
-/**
- * Email utility using Nodemailer with Gmail SMTP.
- *
- * Required env vars:
- *   EMAIL_USER   — your Gmail address, e.g. yourname@gmail.com
- *   EMAIL_PASS   — Gmail App Password (16 chars, NOT your real Gmail password)
- *   EMAIL_FROM   — display sender, e.g. "ChatApp <yourname@gmail.com>"
- *   CLIENT_URL   — frontend base URL, e.g. https://your-app.vercel.app
- *
- * Gmail App Password setup:
- *   1. Enable 2-Step Verification on your Google account
- *   2. Go to Google Account → Security → App Passwords
- *   3. Generate a new app password (select "Mail" + "Other")
- *   4. Copy the 16-character code into EMAIL_PASS (no spaces)
- */
-
-// ─── Transporter singleton ────────────────────────────────────────────────────
-// Created once on first use — Nodemailer reuses the SMTP connection pool.
-// Lazy init means the server boots fine even if email env vars are missing.
-
 let transporter: Transporter | null = null;
 
 const getTransporter = (): Transporter => {
@@ -36,7 +16,6 @@ const getTransporter = (): Transporter => {
   transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user, pass },
-    // Pool reuses SMTP connections — avoids opening a new connection per email
     pool: true,
     maxConnections: 5,
     maxMessages: 100,
@@ -45,8 +24,7 @@ const getTransporter = (): Transporter => {
   return transporter;
 };
 
-// ─── Send helper ──────────────────────────────────────────────────────────────
-
+// Send helper
 interface SendEmailOptions {
   to: string;
   subject: string;
@@ -67,8 +45,7 @@ export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
   });
 };
 
-// ─── Email templates ──────────────────────────────────────────────────────────
-
+// Email templates
 export const buildPasswordResetEmail = (resetUrl: string, username: string): string => `
 <!DOCTYPE html>
 <html lang="en">

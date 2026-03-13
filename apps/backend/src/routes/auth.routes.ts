@@ -8,16 +8,15 @@ import {
   forgotPassword,
   validateResetToken,
   resetPassword,
+  googleAuth,
 } from '../controllers/auth.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 
 const router: Router = Router();
 
-// ─── Rate limiter for forgot-password ─────────────────────────────────────────
-// 3 requests per 15 minutes, keyed by email (falls back to IP if body is absent).
-// express-rate-limit is already in package.json — no new dependency.
+// Rate limiter: forgot-password
 const forgotPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 3,
   message: {
     success: false,
@@ -25,19 +24,38 @@ const forgotPasswordLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Key by submitted email so rate limit is per-account, not per-IP
   keyGenerator: (req) => (req.body?.email as string | undefined) ?? req.ip ?? 'unknown',
 });
 
-// ─── Existing routes (unchanged) ─────────────────────────────────────────────
+// Rate limiter: Google OAuth
+const oauthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    success: false,
+    message: 'Too many sign-in attempts. Please try again in 15 minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const ip = req.ip ?? 'unknown';
+    const ua = (req.headers['user-agent'] ?? '').slice(0, 64);
+    return `${ip}:${ua}`;
+  },
+});
+
+// Local auth routes (unchanged)
 router.post('/register', register);
 router.post('/login', login);
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getMe);
 
-// ─── Password reset routes ────────────────────────────────────────────────────
+// Password reset routes
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
-router.get('/reset-password/:token', validateResetToken);  // pre-check on page load (read-only)
-router.post('/reset-password/:token', resetPassword);      // submit new password
+router.get('/reset-password/:token', validateResetToken);
+router.post('/reset-password/:token', resetPassword);
+
+// Google OAuth route
+router.post('/google', oauthLimiter, googleAuth);
 
 export default router;

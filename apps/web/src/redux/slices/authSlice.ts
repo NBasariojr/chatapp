@@ -4,11 +4,15 @@ import { authService } from 'services/auth.service';
 
 type AsyncStatus = 'idle' | 'loading' | 'success' | 'error';
 
+// State Shape
 interface AuthState {
   user: AuthUser | null;
   token: string | null;
-  isLoading: boolean;
-  error: string | null;
+  isLoading: boolean;     // Local auth: login / register / fetchMe
+  error: string | null;   // Local auth errors only
+  // F014: Separate OAuth state — Google loading/error never bleeds into local login form
+  isOAuthLoading: boolean;
+  oauthError: string | null;
   forgotPassword: { status: AsyncStatus; error: string | null };
   resetPassword: { status: AsyncStatus; error: string | null };
 }
@@ -18,12 +22,13 @@ const initialState: AuthState = {
   token: localStorage.getItem('chatapp_token'),
   isLoading: false,
   error: null,
+  isOAuthLoading: false,
+  oauthError: null,
   forgotPassword: { status: 'idle', error: null },
   resetPassword: { status: 'idle', error: null },
 };
 
-// ─── Thunks ───────────────────────────────────────────────────────────────────
-
+// Thunks
 export const login = createAsyncThunk(
   'auth/login',
   async (credentials: { email: string; password: string }, { rejectWithValue }) => {
@@ -91,8 +96,20 @@ export const resetPassword = createAsyncThunk(
   }
 );
 
-// ─── Slice ────────────────────────────────────────────────────────────────────
+export const googleLogin = createAsyncThunk(
+  'auth/googleLogin',
+  async (code: string, { rejectWithValue }) => {
+    try {
+      const authUser = await authService.googleSignIn(code);
+      localStorage.setItem('chatapp_token', authUser.token);
+      return authUser;
+    } catch (err: unknown) {
+      return rejectWithValue(err instanceof Error ? err.message : 'Google sign-in failed');
+    }
+  }
+);
 
+// Slice
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -100,12 +117,16 @@ const authSlice = createSlice({
     logout(state) {
       state.user = null;
       state.token = null;
+      state.error = null;
+      state.oauthError = null;
       localStorage.removeItem('chatapp_token');
     },
     clearError(state) {
       state.error = null;
     },
-    // Called on page unmount to prevent stale status on re-entry
+    clearOAuthError(state) {
+      state.oauthError = null;
+    },
     clearForgotPasswordStatus(state) {
       state.forgotPassword = { status: 'idle', error: null };
     },
@@ -161,6 +182,23 @@ const authSlice = createSlice({
         state.error = action.payload as string;
       });
 
+    // googleLogin
+    builder
+      .addCase(googleLogin.pending, (state) => {
+        state.isOAuthLoading = true;
+        state.oauthError = null;
+      })
+      .addCase(googleLogin.fulfilled, (state, action: PayloadAction<AuthUser>) => {
+        state.isOAuthLoading = false;
+        state.oauthError = null;
+        state.user = action.payload;
+        state.token = action.payload.token;
+      })
+      .addCase(googleLogin.rejected, (state, action) => {
+        state.isOAuthLoading = false;
+        state.oauthError = action.payload as string;
+      });
+
     // forgotPassword
     builder
       .addCase(forgotPassword.pending, (state) => {
@@ -187,6 +225,12 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearError, clearForgotPasswordStatus, clearResetPasswordStatus } =
-  authSlice.actions;
+export const {
+  logout,
+  clearError,
+  clearOAuthError,
+  clearForgotPasswordStatus,
+  clearResetPasswordStatus,
+} = authSlice.actions;
+
 export default authSlice.reducer;

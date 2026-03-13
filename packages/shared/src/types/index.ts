@@ -1,9 +1,20 @@
-// packages/shared/types/index.ts
+// packages/shared/src/types/index.ts
 
 export type UserRole = 'user' | 'admin' | 'moderator';
 export type MessageType = 'text' | 'image' | 'video' | 'file';
 export type MessageStatus = 'sent' | 'delivered' | 'read';
 
+// ─── OAuth ────────────────────────────────────────────────────────────────────
+
+/**
+ * Tracks which authentication method(s) a user has set up.
+ * - 'local'  : email + password only
+ * - 'google' : Google Sign-In only (no password set)
+ * - 'both'   : has both local password AND linked Google account
+ */
+export type AuthProvider = 'local' | 'google' | 'both';
+
+// ─── User ─────────────────────────────────────────────────────────────────────
 
 export interface User {
   _id: string;
@@ -13,6 +24,11 @@ export interface User {
   role: UserRole;
   isOnline: boolean;
   lastSeen: string;
+  // ─── OAuth fields ───────────────────────────────────────────────────────────
+  authProvider: AuthProvider;
+  displayName?: string;        // Populated from Google profile on first OAuth sign-in
+  isEmailVerified: boolean;    // true for all Google accounts; set on email confirmation for local
+  // ──────────────────────────────────────────────────────────────────────────
   twoFactorEnabled?: boolean;
   notificationSettings?: {
     browserPush?: boolean;
@@ -67,7 +83,7 @@ export interface Room {
   isGroup: boolean;
   participants: User[];
   admins?: User[];
-  moderators?: User[];   
+  moderators?: User[];
   lastMessage?: Message;
   avatar?: string;
   createdBy: string;
@@ -101,7 +117,8 @@ export interface Notification {
   createdAt: string;
 }
 
-// API Response types
+// ─── API Response types ───────────────────────────────────────────────────────
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -119,7 +136,8 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Socket event types
+// ─── Socket event types ───────────────────────────────────────────────────────
+
 export interface SocketEvents {
   'message:send': (payload: { roomId: string; content: string; type: MessageType }) => void;
   'message:received': (message: Message) => void;

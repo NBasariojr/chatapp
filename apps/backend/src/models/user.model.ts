@@ -1,6 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+export type AuthProvider = 'local' | 'google' | 'both';
+
 export interface IUser extends Document {
   username: string;
   email: string;
@@ -12,11 +14,13 @@ export interface IUser extends Document {
   friends: mongoose.Types.ObjectId[];
   friendRequestsSent: mongoose.Types.ObjectId[];
   friendRequestsReceived: mongoose.Types.ObjectId[];
-  // ─── Password reset fields ──────────────────────────────────────────────
-  passwordResetToken?: string;  // SHA-256 hash of the raw token; select: false
-  passwordResetExpires?: Date;  // TTL for the token; select: false
-  passwordChangedAt?: Date;     // Set on every password change; used by auth middleware
-  // ────────────────────────────────────────────────────────────────────────
+  googleId?: string;
+  authProvider: AuthProvider;
+  displayName?: string;
+  isEmailVerified: boolean;
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
+  passwordChangedAt?: Date;
   comparePassword(candidate: string): Promise<boolean>;
 }
 
@@ -40,9 +44,15 @@ const userSchema = new Schema<IUser>(
     },
     password: {
       type: String,
-      required: [true, 'Password is required'],
       minlength: [8, 'Password must be at least 8 characters'],
-      select: false, // Never return password in queries
+      select: false,
+      validate: {
+        validator: function (this: IUser, val: string | undefined | null): boolean {
+          if (this.authProvider === 'local' && !val) return false;
+          return true;
+        },
+        message: 'Password is required for local accounts',
+      },
     },
     avatar: {
       type: String,
@@ -64,11 +74,27 @@ const userSchema = new Schema<IUser>(
     friends: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     friendRequestsSent: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     friendRequestsReceived: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-
-    // ─── Password reset fields ──────────────────────────────────────────────
+    googleId: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    authProvider: {
+      type: String,
+      enum: ['local', 'google', 'both'],
+      default: 'local',
+    },
+    displayName: {
+      type: String,
+      default: null,
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
     passwordResetToken: {
       type: String,
-      select: false, // Never returned by normal queries — only fetched explicitly
+      select: false,
     },
     passwordResetExpires: {
       type: Date,
@@ -77,15 +103,14 @@ const userSchema = new Schema<IUser>(
     passwordChangedAt: {
       type: Date,
       default: undefined,
-      // Not select:false — auth middleware needs this on every authenticated request
     },
-    // ────────────────────────────────────────────────────────────────────────
   },
   {
     timestamps: true,
     toJSON: {
       transform: (_doc, ret) => {
         delete ret.password;
+        delete ret.googleId;
         delete ret.passwordResetToken;
         delete ret.passwordResetExpires;
         return ret;
@@ -94,7 +119,8 @@ const userSchema = new Schema<IUser>(
   }
 );
 
-// Hash password before saving
+// Pre-save hook: hash password
+// Guard `!this.password` handles OAuth users who have no password set.
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password') || !this.password) return next();
   const salt = await bcrypt.genSalt(12);
@@ -102,15 +128,16 @@ userSchema.pre('save', async function (next) {
   next();
 });
 
-// Compare password method
+// Instance method: compare password
 userSchema.methods.comparePassword = async function (candidate: string): Promise<boolean> {
   if (!this.password) return false;
   return bcrypt.compare(candidate, this.password);
 };
 
-// Indexes
+//Indexes
 userSchema.index({ isOnline: 1 });
-// sparse: true because most users won't have this field set at any given time
 userSchema.index({ passwordResetToken: 1 }, { sparse: true });
+// sparse: true — only indexes non-null googleId values (most users pre-OAuth won't have it)
+userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 
 export const User = mongoose.model<IUser>('User', userSchema);

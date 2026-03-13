@@ -31,3 +31,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# documentation
+Codebase_Engineering_Constraints_and_AI_Builder_Operating_Rules.md

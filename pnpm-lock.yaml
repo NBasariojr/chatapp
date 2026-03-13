@@ -245,6 +245,9 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.2.3
         version: 1.2.4(@types/react@18.2.79)(react@18.3.1)
+      '@react-oauth/google':
+        specifier: 0.12.1
+        version: 0.12.1(react-dom@18.3.1)(react@18.3.1)
       '@reduxjs/toolkit':
         specifier: ^2.6.1
         version: 2.11.2(react-redux@9.2.0)(react@18.3.1)
@@ -3966,6 +3969,16 @@ packages:
     resolution: {integrity: sha512-lTM8gSFHSfkJvQkxacGM6VJtBt61ip2XO54aNfswD+KMw6eeZ4oehl7m0me3CR9hnDE4+60iAZR8sAhvCiI3NA==}
     dependencies:
       nanoid: 3.3.11
+    dev: false
+
+  /@react-oauth/google@0.12.1(react-dom@18.3.1)(react@18.3.1):
+    resolution: {integrity: sha512-qagsy22t+7UdkYAiT5ZhfM4StXi9PPNvw0zuwNmabrWyMKddczMtBIOARflbaIj+wHiQjnMAsZmzsUYuXeyoSg==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+    dependencies:
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
     dev: false
 
   /@reduxjs/toolkit@2.11.2(react-redux@9.2.0)(react@18.2.0):

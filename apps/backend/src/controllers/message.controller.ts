@@ -1,18 +1,22 @@
 // backend/src/controllers/message.controller.ts
-import { Response, NextFunction } from 'express';
-import { z } from 'zod';
-import { Message } from '../models/message.model';
-import { Room } from '../models/room.model';
-import { cacheGet, cacheSet, cacheDel } from '../config/redis';
-import { AuthRequest } from '../middlewares/auth.middleware';
+import { Response, NextFunction } from "express";
+import { z } from "zod";
+import { Message } from "../models/message.model";
+import { Room } from "../models/room.model";
+import { cacheGet, cacheSet, cacheDel } from "../config/redis";
+import { AuthRequest } from "../middlewares/auth.middleware";
 
 const sendMessageSchema = z.object({
   content: z.string().min(1).max(5000),
-  type: z.enum(['text', 'image', 'video', 'file']).default('text'),
+  type: z.enum(["text", "image", "video", "file"]).default("text"),
   replyTo: z.string().optional(),
 });
 
-export const getMessages = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getMessages = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const { roomId } = req.params;
     const page = parseInt(req.query.page as string) || 1;
@@ -20,9 +24,14 @@ export const getMessages = async (req: AuthRequest, res: Response, next: NextFun
     const skip = (page - 1) * limit;
 
     // Verify user is participant
-    const room = await Room.findOne({ _id: roomId, participants: req.user?._id });
+    const room = await Room.findOne({
+      _id: roomId,
+      participants: req.user?._id,
+    });
     if (!room) {
-      res.status(403).json({ success: false, message: 'Access denied to this room' });
+      res
+        .status(403)
+        .json({ success: false, message: "Access denied to this room" });
       return;
     }
 
@@ -40,8 +49,8 @@ export const getMessages = async (req: AuthRequest, res: Response, next: NextFun
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('sender', 'username avatar isOnline')
-        .populate('replyTo', 'content sender'),
+        .populate("sender", "username avatar isOnline")
+        .populate("replyTo", "content sender"),
       Message.countDocuments({ roomId }),
     ]);
 
@@ -61,19 +70,30 @@ export const getMessages = async (req: AuthRequest, res: Response, next: NextFun
   }
 };
 
-export const sendMessage = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const sendMessage = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const { roomId } = req.params;
     const parsed = sendMessageSchema.safeParse(req.body);
 
     if (!parsed.success) {
-      res.status(400).json({ success: false, message: parsed.error.errors[0].message });
+      res
+        .status(400)
+        .json({ success: false, message: parsed.error.errors[0].message });
       return;
     }
 
-    const room = await Room.findOne({ _id: roomId, participants: req.user?._id });
+    const room = await Room.findOne({
+      _id: roomId,
+      participants: req.user?._id,
+    });
     if (!room) {
-      res.status(403).json({ success: false, message: 'Access denied to this room' });
+      res
+        .status(403)
+        .json({ success: false, message: "Access denied to this room" });
       return;
     }
 
@@ -83,7 +103,7 @@ export const sendMessage = async (req: AuthRequest, res: Response, next: NextFun
       roomId,
     });
 
-    await message.populate('sender', 'username avatar');
+    await message.populate("sender", "username avatar");
 
     // Update last message in room
     await Room.findByIdAndUpdate(roomId, { lastMessage: message._id });
@@ -97,26 +117,38 @@ export const sendMessage = async (req: AuthRequest, res: Response, next: NextFun
   }
 };
 
-export const deleteMessage = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const deleteMessage = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const { messageId } = req.params;
     const message = await Message.findById(messageId);
 
     if (!message) {
-      res.status(404).json({ success: false, message: 'Message not found' });
+      res.status(404).json({ success: false, message: "Message not found" });
       return;
     }
 
     // Only sender or admin can delete
-    if (message.sender.toString() !== req.user?._id && req.user?.role !== 'admin') {
-      res.status(403).json({ success: false, message: 'Not authorized to delete this message' });
+    if (
+      message.sender.toString() !== req.user?._id &&
+      req.user?.role !== "admin"
+    ) {
+      res
+        .status(403)
+        .json({
+          success: false,
+          message: "Not authorized to delete this message",
+        });
       return;
     }
 
     await message.deleteOne();
     await cacheDel(`messages:${message.roomId}:page1`);
 
-    res.json({ success: true, message: 'Message deleted' });
+    res.json({ success: true, message: "Message deleted" });
   } catch (error) {
     next(error);
   }

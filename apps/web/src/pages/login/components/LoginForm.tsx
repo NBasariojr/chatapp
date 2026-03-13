@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
-import Button from 'components/ui/Button';
-import Input from 'components/ui/Input';
-import { Checkbox } from 'components/ui/Checkbox';
-import Icon from 'components/AppIcon';
+import React, { useState } from "react";
+import Button from "components/ui/Button";
+import Input from "components/ui/Input";
+import { Checkbox } from "components/ui/Checkbox";
+import Icon from "components/AppIcon";
 
 interface LoginFormProps {
-  onLogin: (data: { email: string; password: string; rememberMe: boolean }) => void;
+  onLogin: (data: {
+    email: string;
+    password: string;
+    rememberMe: boolean;
+  }) => void;
   onForgotPassword: () => void;
   isLoading: boolean;
   error?: string;
@@ -18,10 +22,16 @@ interface LoginFormProps {
   };
 }
 
-const LoginForm = ({ onLogin, onForgotPassword, isLoading, error, passwordRequirements }: LoginFormProps) => {
+const LoginForm = ({
+  onLogin,
+  onForgotPassword,
+  isLoading,
+  error,
+  passwordRequirements,
+}: LoginFormProps) => {
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
+    email: "",
+    password: "",
     rememberMe: false,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -30,24 +40,24 @@ const LoginForm = ({ onLogin, onForgotPassword, isLoading, error, passwordRequir
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
     if (formErrors[name]) {
-      setFormErrors((prev) => ({ ...prev, [name]: '' }));
+      setFormErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (formData.email.trim() === '') {
-      errors.email = 'Email is required';
+    if (formData.email.trim() === "") {
+      errors.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Please enter a valid email address';
+      errors.email = "Please enter a valid email address";
     }
 
     // Password validation with configurable requirements
-    if (formData.password.trim() === '') {
-      errors.password = 'Password is required';
+    if (formData.password.trim() === "") {
+      errors.password = "Password is required";
     } else {
       const requirements = passwordRequirements || { minLength: 6 };
       const password = formData.password;
@@ -57,19 +67,23 @@ const LoginForm = ({ onLogin, onForgotPassword, isLoading, error, passwordRequir
       }
 
       if (requirements.requireUppercase && !/[A-Z]/.test(password)) {
-        errors.password = 'Password must contain at least one uppercase letter';
+        errors.password = "Password must contain at least one uppercase letter";
       }
 
       if (requirements.requireLowercase && !/[a-z]/.test(password)) {
-        errors.password = 'Password must contain at least one lowercase letter';
+        errors.password = "Password must contain at least one lowercase letter";
       }
 
       if (requirements.requireNumbers && !/\d/.test(password)) {
-        errors.password = 'Password must contain at least one number';
+        errors.password = "Password must contain at least one number";
       }
 
-      if (requirements.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-        errors.password = 'Password must contain at least one special character';
+      if (
+        requirements.requireSpecialChars &&
+        !/[!@#$%^&*(),.?":{}|<>]/.test(password)
+      ) {
+        errors.password =
+          "Password must contain at least one special character";
       }
     }
 
@@ -87,7 +101,11 @@ const LoginForm = ({ onLogin, onForgotPassword, isLoading, error, passwordRequir
       {error && (
         <div className="p-4 bg-error/10 border border-error/20 rounded-lg">
           <div className="flex items-center space-x-2">
-            <Icon name="AlertCircle" size={16} className="text-error flex-shrink-0" />
+            <Icon
+              name="AlertCircle"
+              size={16}
+              className="text-error flex-shrink-0"
+            />
             <p className="text-sm text-error">{error}</p>
           </div>
         </div>

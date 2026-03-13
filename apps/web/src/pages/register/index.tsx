@@ -13,7 +13,9 @@ import RegistrationSuccess from "./components/RegistrationSuccess";
 const Register = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { token, isLoading, error } = useSelector((state: RootState) => state.auth);
+  const { token, isLoading, error } = useSelector(
+    (state: RootState) => state.auth,
+  );
 
   const [step, setStep] = useState<"form" | "success">("form");
   const [registeredEmail, setRegisteredEmail] = useState("");
@@ -24,7 +26,9 @@ const Register = () => {
   }, [token, navigate]);
 
   useEffect(() => {
-    return () => { dispatch(clearError()); };
+    return () => {
+      dispatch(clearError());
+    };
   }, [dispatch]);
 
   const handleFormSubmit = async (formData: {
@@ -40,7 +44,7 @@ const Register = () => {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-      })
+      }),
     );
 
     if (register.fulfilled.match(result)) {
@@ -52,7 +56,7 @@ const Register = () => {
   };
 
   const handleOAuthSignup = (provider: string) => {
-    setOauthError(`${provider} signup is not available yet.`);
+    setOauthError("");
   };
 
   const handleContinueToDashboard = () => {
@@ -60,7 +64,6 @@ const Register = () => {
   };
 
   const handleResendVerification = async () => {
-    // Placeholder — wire to backend email verification endpoint when ready
     alert("Verification email resent. Please check your inbox.");
   };
 
@@ -77,7 +80,9 @@ const Register = () => {
                   isLoading={isLoading}
                 />
                 {(error || oauthError) && (
-                  <p className="text-sm text-error text-center">{error || oauthError}</p>
+                  <p className="text-sm text-error text-center">
+                    {error || oauthError}
+                  </p>
                 )}
                 <OAuthOptions
                   onOAuthSignup={handleOAuthSignup}
@@ -98,9 +103,15 @@ const Register = () => {
         <div className="text-center mt-8 text-xs text-muted-foreground">
           <p>© {new Date().getFullYear()} LinkUp. All rights reserved.</p>
           <div className="flex justify-center space-x-4 mt-2">
-            <button className="hover:text-primary transition-colors duration-200">Privacy Policy</button>
-            <button className="hover:text-primary transition-colors duration-200">Terms of Service</button>
-            <button className="hover:text-primary transition-colors duration-200">Support</button>
+            <button className="hover:text-primary transition-colors duration-200">
+              Privacy Policy
+            </button>
+            <button className="hover:text-primary transition-colors duration-200">
+              Terms of Service
+            </button>
+            <button className="hover:text-primary transition-colors duration-200">
+              Support
+            </button>
           </div>
         </div>
       </div>
