@@ -7,6 +7,7 @@ import { fetchRooms, fetchMessages, setActiveRoom } from "redux/slices/chatSlice
 import { connectSocket, disconnectSocket, joinRoom, sendTyping, stopTyping } from "services/socket.service";
 import { chatService } from "services/chat.service";
 import Icon from "components/AppIcon";
+import Header from "components/ui/Header";
 import ConversationList from "./components/ConversationList";
 import MessageThread from "./components/MessageThread";
 import ConversationDetails from "./components/ConversationDetails";
@@ -113,8 +114,10 @@ const ChatDashboard = () => {
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
-      <div className="flex flex-1 overflow-hidden">
+      <Header />
 
+      {/* Main area below fixed header */}
+      <div className="flex flex-1 overflow-hidden" style={{ paddingTop: "64px" }}>
         {/* ── Sidebar ── */}
         <div
           className={[
@@ -162,18 +165,6 @@ const ChatDashboard = () => {
           />
         )}
       </div>
-
-      {/* Mobile back button */}
-      {isMobile && activeConversation && (
-        <div className="fixed top-4 left-4 z-50">
-          <button
-            onClick={() => dispatch(setActiveRoom(null))}
-            className="p-2 bg-card border border-border rounded-lg shadow-lg hover:bg-accent/50 transition-colors"
-          >
-            <Icon name="ArrowLeft" size={20} />
-          </button>
-        </div>
-      )}
 
       {/* Details toggle */}
       {activeConversation && !isMobile && (

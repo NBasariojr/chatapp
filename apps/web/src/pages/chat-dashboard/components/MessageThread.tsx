@@ -1,10 +1,12 @@
 // web/src/pages/chat-dashboard/components/MessageThread.tsx
 import React, { useState, useRef, useEffect } from "react";
+import { useDispatch } from "react-redux";
 import Icon from "components/AppIcon";
 import AppImage from "../../../components/AppImage";
 import Button from "../../../components/ui/Button";
 import ProfileView from "./ProfileView";
 import MessageInput from "./MessageInput";
+import { setActiveRoom } from "../../../redux/slices/chatSlice";
 
 interface Sender {
   id: string;
@@ -75,11 +77,23 @@ const MessageThread = ({
 }: MessageThreadProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const dispatch = useDispatch();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const canEdit = (msg: Message) => {
     const mins = (Date.now() - new Date(msg.timestamp).getTime()) / 60000;
@@ -122,6 +136,14 @@ const MessageThread = ({
       {/* ── Header — fixed height, never collapses ── */}
       <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-border bg-card">
         <div className="flex items-center space-x-3">
+          {isMobile && (
+            <button
+              onClick={() => dispatch(setActiveRoom(null))}
+              className="p-2 -ml-2 hover:bg-accent/50 rounded-lg transition-colors"
+            >
+              <Icon name="ArrowLeft" size={20} />
+            </button>
+          )}
           {conversation.type === "direct" && headerUser ? (
             <ProfileView
               user={{ ...headerUser, name: conversation.name, avatar: conversation.avatar }}
