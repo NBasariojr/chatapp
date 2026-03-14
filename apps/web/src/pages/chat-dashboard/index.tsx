@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "redux/store";
 import { fetchRooms, fetchMessages, addMessage, setActiveRoom } from "redux/slices/chatSlice";
 import { connectSocket, joinRoom, sendTyping, stopTyping } from "services/socket.service";
+import { chatService } from "services/chat.service";
 import Icon from "components/AppIcon";
 import Header from "components/ui/Header";
 import ConversationList from "./components/ConversationList";
@@ -49,7 +50,6 @@ const ChatDashboard = () => {
     fileSize?: string;
   }) => {
     if (!activeRoomId) return;
-    const { chatService } = await import("services/chat.service");
     const savedMessage = await chatService.sendMessage(activeRoomId, messageData.content, messageData.type);
     dispatch(addMessage({ roomId: activeRoomId, message: savedMessage }));
   };
