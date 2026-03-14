@@ -70,7 +70,8 @@ app.use(
           (o) =>
             o === origin ||
             origin.endsWith('.ngrok-free.app') ||
-            origin.endsWith('.ngrok.app')
+            origin.endsWith('.ngrok.app')      ||
+            origin.endsWith('.vercel.app')
         )
       ) {
         return callback(null, true);
