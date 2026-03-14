@@ -80,6 +80,9 @@ importers:
       nodemailer:
         specifier: ^8.0.2
         version: 8.0.2
+      rate-limit-redis:
+        specifier: '3'
+        version: 3.1.0(express-rate-limit@6.11.2)
       socket.io:
         specifier: ^4.6.2
         version: 4.8.3
@@ -11400,6 +11403,15 @@ packages:
   /range-parser@1.2.1:
     resolution: {integrity: sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==}
     engines: {node: '>= 0.6'}
+
+  /rate-limit-redis@3.1.0(express-rate-limit@6.11.2):
+    resolution: {integrity: sha512-guCQGRQhsOlTR4VNHRnksMeet/3ImfdxIQgWP6In4FphJjUbORe0F4XeFshLnbc9xcuFUv9jZL44TgUMSz4XPQ==}
+    engines: {node: '>= 14.5.0'}
+    peerDependencies:
+      express-rate-limit: ^6
+    dependencies:
+      express-rate-limit: 6.11.2(express@4.22.1)
+    dev: false
 
   /raw-body@2.5.3:
     resolution: {integrity: sha512-s4VSOf6yN0rvbRZGxs8Om5CWj6seneMwK3oDb4lWDH0UPhWcxwOWw5+qk24bxq87szX1ydrwylIOp2uG1ojUpA==}

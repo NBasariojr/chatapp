@@ -1,8 +1,9 @@
+// apps/backend/src/app.ts
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
+import { globalLimiter } from './config/rateLimiter';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import roomRoutes from './routes/room.routes';
@@ -16,14 +17,11 @@ import { notFound } from './middlewares/notFound.middleware';
 let Sentry: any = null;
 if (process.env.SENTRY_DSN) {
   try {
-    // Dynamic require — no compile-time failure if package is absent
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     Sentry = require('@sentry/node');
     Sentry.init({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV ?? 'development',
       beforeSend(event: Record<string, unknown>) {
-        // Scrub sensitive OAuth fields from captured request data
         const req = event.request as Record<string, unknown> | undefined;
         if (req?.data) {
           const data = req.data as Record<string, unknown>;
@@ -36,15 +34,17 @@ if (process.env.SENTRY_DSN) {
       },
     });
   } catch {
-    console.warn('[app] @sentry/node not installed — error monitoring disabled. Run: pnpm add @sentry/node --filter @chatapp/backend');
+    console.warn(
+      '[app] @sentry/node not installed — error monitoring disabled. Run: pnpm add @sentry/node --filter @chatapp/backend'
+    );
     Sentry = null;
   }
 }
 
-// Security headers
 const app: Application = express();
 
-// Sentry request handler must come before all routes
+app.set('trust proxy', 1);
+
 if (Sentry) app.use(Sentry.Handlers.requestHandler());
 
 app.use(helmet());
@@ -63,14 +63,13 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
       if (
         allowedOrigins.some(
           (o) =>
             o === origin ||
             origin.endsWith('.ngrok-free.app') ||
-            origin.endsWith('.ngrok.app')      ||
+            origin.endsWith('.ngrok.app') ||
             origin.endsWith('.vercel.app')
         )
       ) {
@@ -92,15 +91,10 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Global rate limiter — 100 req / 15 min / IP
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { success: false, message: 'Too many requests, please try again later.' },
-});
-app.use('/api/', limiter);
+// Global rate limiter for all API routes
+app.use('/api/', globalLimiter);
 
-// Health check
+// Health check endpoint
 app.get('/health', (_req, res) => {
   res.json({ success: true, message: 'Server is running', timestamp: new Date().toISOString() });
 });
@@ -113,7 +107,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Sentry error handler (must come before custom error handler)
+// Sentry error handler
 if (Sentry) app.use(Sentry.Handlers.errorHandler());
 
 // 404 + global error handler

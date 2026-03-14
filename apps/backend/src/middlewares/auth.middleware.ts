@@ -9,6 +9,7 @@ export interface AuthRequest extends Request {
   };
 }
 
+// Authenticate middleware
 export const authenticate = async (
   req: AuthRequest,
   res: Response,
@@ -25,20 +26,14 @@ export const authenticate = async (
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET is not configured');
 
-    // iat is needed for the passwordChangedAt stale-token check below
     const decoded = jwt.verify(token, secret) as { id: string; role: string; iat: number };
 
-    // Fetch passwordChangedAt alongside the fields auth middleware already needs
     const user = await User.findById(decoded.id).select('_id role passwordChangedAt');
     if (!user) {
       res.status(401).json({ success: false, message: 'User not found' });
       return;
     }
 
-    // ─── Stale-JWT guard ───────────────────────────────────────────────────
-    // If the user changed their password after this token was issued, reject it.
-    // This is the Redis-independent fallback that guarantees session invalidation
-    // even when the pub/sub force-logout event could not be delivered.
     if (user.passwordChangedAt) {
       const changedTimestamp = Math.floor(user.passwordChangedAt.getTime() / 1000);
       if (decoded.iat < changedTimestamp) {
@@ -49,7 +44,6 @@ export const authenticate = async (
         return;
       }
     }
-    // ──────────────────────────────────────────────────────────────────────
 
     req.user = { _id: user._id.toString(), role: user.role };
     next();
@@ -62,6 +56,7 @@ export const authenticate = async (
   }
 };
 
+// Require role middleware
 export const requireRole = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {
