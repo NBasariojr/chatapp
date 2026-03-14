@@ -1,4 +1,8 @@
 {
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @chatapp/web run build",
+  "outputDirectory": "apps/web/dist",
+  "framework": "vite",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
