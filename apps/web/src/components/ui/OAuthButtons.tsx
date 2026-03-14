@@ -96,9 +96,13 @@ const OAuthButtons = ({
 
   const handleGoogleLogin = useGoogleLogin({
     flow: "auth-code",
-    onSuccess: (codeResponse) => {
-      dispatch(googleLogin(codeResponse.code));
-      onOAuthLogin?.("google");
+    onSuccess: async (codeResponse) => {
+      try {
+        await dispatch(googleLogin(codeResponse.code)).unwrap();
+        onOAuthLogin?.("google");
+      } catch (error) {
+        console.error("[Google OAuth] Login failed:", error);
+      }
     },
     onError: (errorResponse) => {
       console.error("[Google OAuth] Sign-in flow error:", errorResponse);

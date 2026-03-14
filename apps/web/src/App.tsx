@@ -1,10 +1,14 @@
-// web/src/App.tsx
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Routes from './Routes';
 import { fetchMe, logout } from './redux/slices/authSlice';
 import { connectSocket, disconnectSocket } from './services/socket.service';
 import type { RootState, AppDispatch } from './redux/store';
+import {
+  trackSocketConnected,
+  trackSocketError,
+  trackLogout,
+} from '@/lib/analytics';
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
@@ -13,24 +17,23 @@ function App() {
   useEffect(() => {
     if (!token) return;
 
-    // Validate stored token is still alive on every app load
     dispatch(fetchMe())
       .unwrap()
       .then(() => {
-        // ✅ Token is valid — now safe to connect socket
         connectSocket(token);
+        trackSocketConnected();
       })
       .catch(() => {
-        // ✅ Token is expired/invalid — clear it and redirect to login
+        trackSocketError('token_expired_or_invalid');
         dispatch(logout());
+        trackLogout();
         disconnectSocket();
       });
 
-    // Cleanup on unmount or token change
     return () => {
       disconnectSocket();
     };
-  }, [token]); // re-runs if token changes (login/logout)
+  }, [token]);
 
   return <Routes />;
 }

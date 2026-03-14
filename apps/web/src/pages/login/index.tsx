@@ -43,6 +43,15 @@ const Login = () => {
 
   const handleOAuthLogin = async (provider: string) => {
     setOauthError("");
+    if (provider === "google") {
+      // Google OAuth is handled by the OAuthButtons component
+      // This callback is for when OAuth login succeeds
+      const storedToken = localStorage.getItem("chatapp_token");
+      if (storedToken) {
+        connectSocket(storedToken);
+        navigate("/chat-dashboard");
+      }
+    }
   };
 
   const handleNavigateToRegister = () => navigate("/register");

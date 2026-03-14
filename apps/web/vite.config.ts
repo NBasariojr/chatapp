@@ -1,4 +1,3 @@
-// apps/web/vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -9,42 +8,27 @@ export default defineConfig({
     react(),
     tsconfigPaths(),
   ],
-
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
-
-  // Bundle Splitting
   build: {
     sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {
-          // React core — almost never changes between your deploys
-          'vendor-react': ['react', 'react-dom'],
-
-          // Routing
+          'vendor-react':  ['react', 'react-dom'],
           'vendor-router': ['react-router-dom'],
-
-          // Redux + state management
-          'vendor-redux': ['@reduxjs/toolkit', 'react-redux'],
-
-          // Google OAuth library
-          'vendor-oauth': ['@react-oauth/google'],
-
-          // Socket.IO client
+          'vendor-redux':  ['@reduxjs/toolkit', 'react-redux'],
+          'vendor-oauth':  ['@react-oauth/google'],
           'vendor-socket': ['socket.io-client'],
-
-          // UI utilities (zod, etc.)
-          'vendor-utils': ['zod'],
+          'vendor-utils':  ['zod'],
+          'vendor-analytics': ['@vercel/analytics', '@vercel/speed-insights'],
         },
       },
     },
   },
-
-  // Dev Server (unchanged from your original)
   server: {
     host: true,
     port: 3000,

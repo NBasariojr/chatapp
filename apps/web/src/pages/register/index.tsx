@@ -6,7 +6,7 @@ import { register, clearError } from "redux/slices/authSlice";
 import { connectSocket } from "services/socket.service";
 import RegistrationHeader from "./components/RegistrationHeader";
 import RegistrationForm from "./components/RegistrationForm";
-import OAuthOptions from "./components/OAuthOptions";
+import OAuthButtons from "../../components/ui/OAuthButtons";
 import LoginRedirect from "./components/LoginRedirect";
 import RegistrationSuccess from "./components/RegistrationSuccess";
 
@@ -55,8 +55,18 @@ const Register = () => {
     }
   };
 
-  const handleOAuthSignup = (provider: string) => {
+  const handleOAuthSignup = async (provider: string) => {
     setOauthError("");
+    if (provider === "google") {
+      // Google OAuth is handled by the OAuthButtons component
+      // This callback is for when OAuth login succeeds
+      const storedToken = localStorage.getItem("chatapp_token");
+      if (storedToken) {
+        connectSocket(storedToken);
+        setRegisteredEmail("user@gmail.com"); // Will be updated from Google profile
+        setStep("success");
+      }
+    }
   };
 
   const handleContinueToDashboard = () => {
@@ -84,8 +94,8 @@ const Register = () => {
                     {error || oauthError}
                   </p>
                 )}
-                <OAuthOptions
-                  onOAuthSignup={handleOAuthSignup}
+                <OAuthButtons
+                  onOAuthLogin={handleOAuthSignup}
                   isLoading={isLoading}
                 />
                 <LoginRedirect onNavigateToLogin={() => navigate("/login")} />

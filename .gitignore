@@ -34,3 +34,12 @@ Thumbs.db
 
 # documentation
 Codebase_Engineering_Constraints_and_AI_Builder_Operating_Rules.md
+
+# AI memory — session files are ephemeral
+.ai/
+
+#Project Specific Rules
+.windsurfrules
+
+#Project Memory
+PROJECT_MEMORY.md
