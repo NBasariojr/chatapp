@@ -20,7 +20,12 @@ client.interceptors.response.use(
   (error) => {
     const message =
       error.response?.data?.message ?? error.message ?? 'An unexpected error occurred';
-    return Promise.reject(new Error(message));
+
+    // Attach status so callers can distinguish 401 from network errors
+    const enhancedError = new Error(message) as Error & { status?: number };
+    enhancedError.status = error.response?.status;
+
+    return Promise.reject(enhancedError);
   }
 );
 

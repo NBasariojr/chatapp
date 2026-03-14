@@ -23,11 +23,17 @@ function App() {
         connectSocket(token);
         trackSocketConnected();
       })
-      .catch(() => {
-        trackSocketError('token_expired_or_invalid');
-        dispatch(logout());
-        trackLogout();
-        disconnectSocket();
+      .catch((err: Error & { status?: number }) => {
+        // Only logout if server explicitly says token is invalid (401)
+        // Network errors, timeouts, Render cold starts → do NOT logout
+        if (err?.status === 401) {
+          trackSocketError('token_expired_or_invalid');
+          dispatch(logout());
+          trackLogout();
+          disconnectSocket();
+        }
+        // For any other error (500, network timeout, etc.) — stay logged in
+        // The user still has a valid token in localStorage
       });
 
     return () => {

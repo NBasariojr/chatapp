@@ -37,7 +37,8 @@ export const connectSocket = (token: string): Socket => {
     auth: { token },
     reconnection: true,
     reconnectionDelay: 1000,
-    reconnectionAttempts: 5,
+    reconnectionDelayMax: 10000,  // Cap at 10s between retries
+    reconnectionAttempts: Infinity, // Keep trying forever — handles Render cold starts
   });
 
   socket.on('connect', () => {
