@@ -1,3 +1,4 @@
+// apps/web/vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -15,15 +16,29 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor-router': ['react-router-dom'],
-          'vendor-redux':  ['@reduxjs/toolkit', 'react-redux'],
-          'vendor-oauth':  ['@react-oauth/google'],
-          'vendor-socket': ['socket.io-client'],
-          'vendor-utils':  ['zod'],
+          'vendor-router':    ['react-router-dom'],
+          'vendor-redux':     ['@reduxjs/toolkit', 'react-redux'],
+          'vendor-oauth':     ['@react-oauth/google'],
+          'vendor-socket':    ['socket.io-client'],
+          'vendor-utils':     ['zod'],
           'vendor-analytics': ['@vercel/analytics', '@vercel/speed-insights'],
+
+          'vendor-react':     ['react', 'react-dom'],
+          'vendor-charts':    ['recharts', 'd3'],
+          'vendor-motion':    ['framer-motion'],
+          'vendor-http':      ['axios'],
+          'vendor-date':      ['date-fns'],
+          'vendor-ui':        [
+            'lucide-react',
+            'clsx',
+            'tailwind-merge',
+            'class-variance-authority',
+          ],
+          'vendor-forms':     ['react-hook-form', '@hookform/resolvers'],
         },
       },
     },

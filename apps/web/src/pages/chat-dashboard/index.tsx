@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "redux/store";
-import { fetchRooms, fetchMessages, addMessage, setActiveRoom } from "redux/slices/chatSlice";
-import { connectSocket, joinRoom, sendTyping, stopTyping } from "services/socket.service";
+import { fetchRooms, fetchMessages, setActiveRoom } from "redux/slices/chatSlice";
+import { connectSocket, disconnectSocket, joinRoom, sendTyping, stopTyping } from "services/socket.service";
 import { chatService } from "services/chat.service";
 import Icon from "components/AppIcon";
 import Header from "components/ui/Header";
@@ -28,7 +28,11 @@ const ChatDashboard = () => {
     if (!token) { navigate("/login"); return; }
     connectSocket(token);
     dispatch(fetchRooms());
-  }, [token, dispatch, navigate]);
+
+    return () => {
+      disconnectSocket();
+    };
+  }, [token]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -50,8 +54,7 @@ const ChatDashboard = () => {
     fileSize?: string;
   }) => {
     if (!activeRoomId) return;
-    const savedMessage = await chatService.sendMessage(activeRoomId, messageData.content, messageData.type);
-    dispatch(addMessage({ roomId: activeRoomId, message: savedMessage }));
+    await chatService.sendMessage(activeRoomId, messageData.content, messageData.type);
   };
 
   const handleEditMessage = (_id: string, _content: string) => { /* TODO */ };
@@ -108,7 +111,7 @@ const ChatDashboard = () => {
   const mappedActive = activeConversation
     ? conversations.find((c) => c.id === activeRoomId) ?? null
     : null;
-    
+
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       <Header />

@@ -1,7 +1,7 @@
 // web/src/redux/slices/chatSlice.ts
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import type { Room, Message } from '@chatapp/shared';
-import { chatService } from '../../services/chat.service';
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import type { Room, Message } from "@chatapp/shared";
+import { chatService } from "../../services/chat.service";
 
 interface ChatState {
   rooms: Room[];
@@ -23,43 +23,68 @@ const initialState: ChatState = {
   error: null,
 };
 
-export const fetchRooms = createAsyncThunk('chat/fetchRooms', async (_, { rejectWithValue }) => {
-  try {
-    return await chatService.getRooms();
-  } catch (err) {
-    return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch rooms');
-  }
-});
+export const fetchRooms = createAsyncThunk(
+  "chat/fetchRooms",
+  async (_, { rejectWithValue }) => {
+    try {
+      return await chatService.getRooms();
+    } catch (err) {
+      return rejectWithValue(
+        err instanceof Error ? err.message : "Failed to fetch rooms",
+      );
+    }
+  },
+);
 
 export const fetchMessages = createAsyncThunk(
-  'chat/fetchMessages',
-  async ({ roomId, page = 1 }: { roomId: string; page?: number }, { rejectWithValue }) => {
+  "chat/fetchMessages",
+  async (
+    { roomId, page = 1 }: { roomId: string; page?: number },
+    { rejectWithValue },
+  ) => {
     try {
       const data = await chatService.getMessages(roomId, page);
       return { roomId, messages: data.messages };
     } catch (err) {
-      return rejectWithValue(err instanceof Error ? err.message : 'Failed to fetch messages');
+      return rejectWithValue(
+        err instanceof Error ? err.message : "Failed to fetch messages",
+      );
     }
-  }
+  },
 );
 
 const chatSlice = createSlice({
-  name: 'chat',
+  name: "chat",
   initialState,
   reducers: {
     setActiveRoom(state, action: PayloadAction<string | null>) {
       state.activeRoomId = action.payload;
     },
-    addMessage(state, action: PayloadAction<{ roomId: string; message: Message }>) {
+    addMessage(
+      state,
+      action: PayloadAction<{ roomId: string; message: Message }>,
+    ) {
       const { roomId, message } = action.payload;
       if (!state.messages[roomId]) state.messages[roomId] = [];
+
+      const alreadyExists = state.messages[roomId].some(
+        (m) => m._id === message._id,
+      );
+      if (alreadyExists) return;
+
       state.messages[roomId].push(message);
 
-      // Update last message in room list
       const room = state.rooms.find((r) => r._id === roomId);
       if (room) room.lastMessage = message;
     },
-    setTyping(state, action: PayloadAction<{ roomId: string; userId: string; isTyping: boolean }>) {
+    setTyping(
+      state,
+      action: PayloadAction<{
+        roomId: string;
+        userId: string;
+        isTyping: boolean;
+      }>,
+    ) {
       const { roomId, userId, isTyping } = action.payload;
       if (!state.typingUsers[roomId]) state.typingUsers[roomId] = [];
 
@@ -68,10 +93,15 @@ const chatSlice = createSlice({
           state.typingUsers[roomId].push(userId);
         }
       } else {
-        state.typingUsers[roomId] = state.typingUsers[roomId].filter((id) => id !== userId);
+        state.typingUsers[roomId] = state.typingUsers[roomId].filter(
+          (id) => id !== userId,
+        );
       }
     },
-    updateUserStatus(state, action: PayloadAction<{ userId: string; isOnline: boolean }>) {
+    updateUserStatus(
+      state,
+      action: PayloadAction<{ userId: string; isOnline: boolean }>,
+    ) {
       const { userId, isOnline } = action.payload;
       state.rooms.forEach((room) => {
         const participant = room.participants.find((p) => p._id === userId);
@@ -91,5 +121,6 @@ const chatSlice = createSlice({
   },
 });
 
-export const { setActiveRoom, addMessage, setTyping, updateUserStatus } = chatSlice.actions;
+export const { setActiveRoom, addMessage, setTyping, updateUserStatus } =
+  chatSlice.actions;
 export default chatSlice.reducer;
