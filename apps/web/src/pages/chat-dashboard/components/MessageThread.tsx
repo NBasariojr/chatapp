@@ -182,13 +182,6 @@ const MessageThread = ({
                     {!showAvatar && !isMe && <div className="w-8 mr-2" />}
 
                     <div className={`relative ${isMe ? "mr-2" : ""}`}>
-                      {!isMe && conversation.type === "group" && showAvatar && (
-                        <div className="flex items-center space-x-2 mb-1 ml-1">
-                          <p className="text-xs font-medium text-foreground">{message.sender.name}</p>
-                          {message.sender.role === "admin" && <Icon name="Crown" size={10} className="text-warning" />}
-                        </div>
-                      )}
-
                       <div className={`px-4 py-2 rounded-2xl ${
                         isMe ? "bg-primary text-primary-foreground" : "bg-card border border-border text-card-foreground"
                       }`}>

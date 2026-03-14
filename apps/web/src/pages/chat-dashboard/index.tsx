@@ -7,7 +7,6 @@ import { fetchRooms, fetchMessages, setActiveRoom } from "redux/slices/chatSlice
 import { connectSocket, disconnectSocket, joinRoom, sendTyping, stopTyping } from "services/socket.service";
 import { chatService } from "services/chat.service";
 import Icon from "components/AppIcon";
-import Header from "components/ui/Header";
 import ConversationList from "./components/ConversationList";
 import MessageThread from "./components/MessageThread";
 import ConversationDetails from "./components/ConversationDetails";
@@ -114,10 +113,7 @@ const ChatDashboard = () => {
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
-      <Header />
-
-      {/* Main area below fixed header */}
-      <div className="flex flex-1 overflow-hidden" style={{ paddingTop: "64px" }}>
+      <div className="flex flex-1 overflow-hidden">
 
         {/* ── Sidebar ── */}
         <div
