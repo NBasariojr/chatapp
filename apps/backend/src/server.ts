@@ -1,5 +1,9 @@
-import dotenv from "dotenv";
-import path from "node:path";
+import dotenv from 'dotenv';
+
+import path from 'node:path';
+import { setIO } from './config/socket';
+
+
 
 // Load environment variables based on NODE_ENV
 const envFile =
@@ -54,6 +58,10 @@ const io = new SocketServer(httpServer, {
   },
   pingTimeout: 60000,
 });
+
+setIO(io);
+
+
 
 // Initialize socket event handlers
 initSocketHandlers(io);

@@ -5,6 +5,7 @@ import { Message } from "../models/message.model";
 import { Room } from "../models/room.model";
 import { cacheGet, cacheSet, cacheDel } from "../config/redis";
 import { AuthRequest } from "../middlewares/auth.middleware";
+import { getIO } from '../config/socket';
 
 const sendMessageSchema = z.object({
   content: z.string().min(1).max(5000),
@@ -19,8 +20,8 @@ export const getMessages = async (
 ): Promise<void> => {
   try {
     const { roomId } = req.params;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
+    const page = Number.parseInt(req.query.page as string) || 1;
+    const limit = Number.parseInt(req.query.limit as string) || 50;
     const skip = (page - 1) * limit;
 
     // Verify user is participant
@@ -55,7 +56,7 @@ export const getMessages = async (
     ]);
 
     const result = {
-      messages: messages.reverse(),
+      messages: messages.slice().reverse(),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
 
@@ -78,22 +79,14 @@ export const sendMessage = async (
   try {
     const { roomId } = req.params;
     const parsed = sendMessageSchema.safeParse(req.body);
-
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({ success: false, message: parsed.error.errors[0].message });
+      res.status(400).json({ success: false, message: parsed.error.errors[0].message });
       return;
     }
 
-    const room = await Room.findOne({
-      _id: roomId,
-      participants: req.user?._id,
-    });
+    const room = await Room.findOne({ _id: roomId, participants: req.user?._id });
     if (!room) {
-      res
-        .status(403)
-        .json({ success: false, message: "Access denied to this room" });
+      res.status(403).json({ success: false, message: "Access denied to this room" });
       return;
     }
 
@@ -103,13 +96,13 @@ export const sendMessage = async (
       roomId,
     });
 
-    await message.populate("sender", "username avatar");
+    await message.populate("sender", "username avatar isOnline");
 
-    // Update last message in room
     await Room.findByIdAndUpdate(roomId, { lastMessage: message._id });
-
-    // Invalidate message cache for this room
     await cacheDel(`messages:${roomId}:page1`);
+
+
+    getIO().to(roomId).emit('message:received', message);
 
     res.status(201).json({ success: true, data: message });
   } catch (error) {
@@ -133,7 +126,7 @@ export const deleteMessage = async (
 
     // Only sender or admin can delete
     if (
-      message.sender.toString() !== req.user?._id &&
+      !message.sender.equals(req.user?._id) &&
       req.user?.role !== "admin"
     ) {
       res
@@ -146,7 +139,7 @@ export const deleteMessage = async (
     }
 
     await message.deleteOne();
-    await cacheDel(`messages:${message.roomId}:page1`);
+    await cacheDel(`messages:${String(message.roomId)}:page1`);
 
     res.json({ success: true, message: "Message deleted" });
   } catch (error) {
