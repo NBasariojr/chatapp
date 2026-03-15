@@ -1,24 +1,21 @@
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
+import { email } from '../config';
 
 let transporter: Transporter | null = null;
 
 const getTransporter = (): Transporter => {
   if (transporter) return transporter;
 
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
-
-  if (!user || !pass) {
-    throw new Error('EMAIL_USER and EMAIL_PASS must be set in environment variables');
-  }
-
   transporter = nodemailer.createTransport({
     service: 'gmail',
-    auth: { user, pass },
+    auth: { 
+      user: email.user, 
+      pass: email.pass 
+    },
     pool: true,
-    maxConnections: 5,
-    maxMessages: 100,
+    maxConnections: email.maxConnections,
+    maxMessages: email.maxMessages,
   });
 
   return transporter;
@@ -32,13 +29,10 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
-  const from = process.env.EMAIL_FROM;
-  if (!from) throw new Error('EMAIL_FROM not configured');
-
   const mailer = getTransporter();
 
   await mailer.sendMail({
-    from,
+    from: email.from,
     to: options.to,
     subject: options.subject,
     html: options.html,

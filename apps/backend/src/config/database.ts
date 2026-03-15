@@ -1,12 +1,8 @@
 // backend/src/config/database.ts
 import mongoose from 'mongoose';
+import { db } from './index';
 
 export const connectDB = async (): Promise<void> => {
-  const uri = process.env.MONGO_URI;
-  if (!uri) {
-    throw new Error('MONGO_URI environment variable is not set');
-  }
-
   mongoose.set('strictQuery', false);
 
   mongoose.connection.on('connected', () => {
@@ -21,7 +17,7 @@ export const connectDB = async (): Promise<void> => {
     console.warn('⚠️ MongoDB disconnected');
   });
 
-  await mongoose.connect(uri, {
-    serverSelectionTimeoutMS: 5000,
+  await mongoose.connect(db.uri, {
+    serverSelectionTimeoutMS: db.serverSelectionTimeoutMS,
   });
 };

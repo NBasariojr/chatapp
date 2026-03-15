@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import jwtLib from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { User } from "../models/user.model";
@@ -11,6 +11,7 @@ import {
   upsertGoogleUser,
 } from "../services/oauth.service";
 import { OAuthVerificationError } from "../utils/errors";
+import { config, jwt } from "../config";
 
 // Schemas
 const registerSchema = z.object({
@@ -61,11 +62,11 @@ const generateToken = (
   role: string,
   authProvider: string,
 ): string => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET not configured");
-  return jwt.sign({ id, role, authProvider }, secret, {
-    expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as unknown as number,
-  });
+  return jwtLib.sign(
+    { id, role, authProvider },
+    jwt.secret,
+    { expiresIn: jwt.expiresIn }
+  );
 };
 
 // Always return this exact message for forgot-password — prevents user enumeration
@@ -256,8 +257,7 @@ export const forgotPassword = async (
       passwordResetExpires: new Date(Date.now() + FIFTEEN_MINUTES_MS),
     });
 
-    const clientUrl = process.env.CLIENT_URL ?? "http://localhost:3000";
-    const resetUrl = `${clientUrl}/reset-password/${rawToken}`;
+    const resetUrl = `${config.clientUrl}/reset-password/${rawToken}`;
 
     try {
       await sendEmail({
