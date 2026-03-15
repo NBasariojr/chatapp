@@ -155,4 +155,4 @@ export function captureException(
   });
 }
 
-export { Sentry };
+export * from '@sentry/node';

@@ -115,7 +115,7 @@ export function addBreadcrumb(
   Sentry.addBreadcrumb({ category, message, data, level: 'info' });
 }
 
-export { Sentry };
+export * as Sentry from '@sentry/react';
 
 // Injected by Vite define plugin (see vite.config.ts)
 declare const APP_VERSION: string;
