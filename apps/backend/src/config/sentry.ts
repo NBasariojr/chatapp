@@ -10,7 +10,6 @@
  * and Sentry's auto-instrumentation will miss the initial module graph.
  */
 import * as Sentry from '@sentry/node';
-import '@sentry/tracing'; // Required for tracesSampleRate to work in v7
 
 // ─── PII Filter ──────────────────────────────────────────────────────────────
 
