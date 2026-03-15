@@ -1,8 +1,6 @@
-// apps/backend/src/app.ts
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
 import { globalLimiter } from './config/rateLimiter';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
@@ -12,40 +10,13 @@ import mediaRoutes from './routes/media.routes';
 import adminRoutes from './routes/admin.routes';
 import { errorHandler } from './middlewares/error.middleware';
 import { notFound } from './middlewares/notFound.middleware';
-
-// Optional Sentry integration
-let Sentry: any = null;
-if (process.env.SENTRY_DSN) {
-  try {
-    Sentry = require('@sentry/node');
-    Sentry.init({
-      dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV ?? 'development',
-      beforeSend(event: Record<string, unknown>) {
-        const req = event.request as Record<string, unknown> | undefined;
-        if (req?.data) {
-          const data = req.data as Record<string, unknown>;
-          const SENSITIVE_FIELDS = ['code', 'accessToken', 'idToken', 'id_token', 'access_token'];
-          for (const field of SENSITIVE_FIELDS) {
-            if (field in data) data[field] = '[REDACTED]';
-          }
-        }
-        return event;
-      },
-    });
-  } catch {
-    console.warn(
-      '[app] @sentry/node not installed — error monitoring disabled. Run: pnpm add @sentry/node --filter @chatapp/backend'
-    );
-    Sentry = null;
-  }
-}
+import { sentryRequestHandler } from './config/sentry';
 
 const app: Application = express();
 
 app.set('trust proxy', 1);
 
-if (Sentry) app.use(Sentry.Handlers.requestHandler());
+app.use(sentryRequestHandler());
 
 app.use(helmet());
 
@@ -82,24 +53,19 @@ app.use(
   })
 );
 
-// Body parsing
+// Body Parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// HTTP request logging (dev only)
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
-}
-
-// Global rate limiter for all API routes
+// Rate Limiting
 app.use('/api/', globalLimiter);
 
-// Health check endpoint
+// Health Check
 app.get('/health', (_req, res) => {
   res.json({ success: true, message: 'Server is running', timestamp: new Date().toISOString() });
 });
 
-// API routes
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/rooms', roomRoutes);
@@ -107,10 +73,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Sentry error handler
-if (Sentry) app.use(Sentry.Handlers.errorHandler());
-
-// 404 + global error handler
+// Error Handling
 app.use(notFound);
 app.use(errorHandler);
 

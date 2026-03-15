@@ -5,6 +5,7 @@ import { User } from '../models/user.model';
 import { Message } from '../models/message.model';
 import { Room } from '../models/room.model';
 import { cacheSet, cacheDel } from '../config/redis';
+import { captureException } from '../config/sentry';
 
 interface AuthSocket extends Socket {
   userId?: string;
@@ -61,11 +62,29 @@ export const initSocketHandlers = (io: SocketServer): void => {
 
     // Handle joining a specific room
     socket.on('room:join', (roomId: string) => {
-      socket.join(roomId);
+      try {
+        socket.join(roomId);
+      } catch (error) {
+        captureException(error, {
+          userId: socket.userId,
+          roomId,
+          event: 'room:join',
+        });
+        socket.emit('error', { message: 'Failed to join room' });
+      }
     });
 
     socket.on('room:leave', (roomId: string) => {
-      socket.leave(roomId);
+      try {
+        socket.leave(roomId);
+      } catch (error) {
+        captureException(error, {
+          userId: socket.userId,
+          roomId,
+          event: 'room:leave',
+        });
+        socket.emit('error', { message: 'Failed to leave room' });
+      }
     });
 
     // Handle sending a message via socket
@@ -97,33 +116,73 @@ export const initSocketHandlers = (io: SocketServer): void => {
 
         // Broadcast to all participants in the room
         io.to(roomId).emit('message:received', message);
-      } catch (err) {
-        console.error('Socket message send error:', err);
+      } catch (error) {
+        captureException(error, {
+          userId: socket.userId,
+          roomId: payload.roomId,
+          event: 'message:send',
+        });
         socket.emit('error', { message: 'Failed to send message' });
       }
     });
 
     // Handle typing indicators
     socket.on('user:typing', ({ roomId }: { roomId: string }) => {
-      socket.to(roomId).emit('user:typing', { roomId, userId });
+      try {
+        socket.to(roomId).emit('user:typing', { roomId, userId });
+      } catch (error) {
+        captureException(error, {
+          userId: socket.userId,
+          roomId,
+          event: 'user:typing',
+        });
+        socket.emit('error', { message: 'Failed to send typing indicator' });
+      }
     });
 
     socket.on('user:stop-typing', ({ roomId }: { roomId: string }) => {
-      socket.to(roomId).emit('user:stop-typing', { roomId, userId });
+      try {
+        socket.to(roomId).emit('user:stop-typing', { roomId, userId });
+      } catch (error) {
+        captureException(error, {
+          userId: socket.userId,
+          roomId,
+          event: 'user:stop-typing',
+        });
+        socket.emit('error', { message: 'Failed to send stop typing indicator' });
+      }
     });
 
     // Handle message read receipts
     socket.on('message:read', async ({ messageId, roomId }: { messageId: string; roomId: string }) => {
-      await Message.findByIdAndUpdate(messageId, { status: 'read' });
-      io.to(roomId).emit('message:read', { messageId, roomId, readBy: userId });
+      try {
+        await Message.findByIdAndUpdate(messageId, { status: 'read' });
+        io.to(roomId).emit('message:read', { messageId, roomId, readBy: userId });
+      } catch (error) {
+        captureException(error, {
+          userId: socket.userId,
+          roomId,
+          event: 'message:read',
+          extra: { messageId },
+        });
+        socket.emit('error', { message: 'Failed to mark message as read' });
+      }
     });
 
     // Handle disconnect
     socket.on('disconnect', async () => {
-      console.log(`🔌 User disconnected: ${userId}`);
-      await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
-      await cacheDel(`online:${userId}`);
-      socket.broadcast.emit('user:offline', userId);
+      try {
+        console.log(`🔌 User disconnected: ${userId}`);
+        await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
+        await cacheDel(`online:${userId}`);
+        socket.broadcast.emit('user:offline', userId);
+      } catch (error) {
+        captureException(error, {
+          userId: socket.userId,
+          event: 'disconnect',
+        });
+        console.error('Error handling disconnect:', error);
+      }
     });
   });
 };
