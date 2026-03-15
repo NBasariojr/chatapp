@@ -1,11 +1,6 @@
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
+import path from "node:path";
 
-import path from 'node:path';
-import { setIO } from './config/socket';
-
-
-
-// Load environment variables based on NODE_ENV
 const envFile =
   process.env.NODE_ENV === "production"
     ? ".env.production"
@@ -13,12 +8,16 @@ const envFile =
 
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
+import { initSentry } from "./config/sentry";
+initSentry();
+
 import http from "node:http";
 import { Server as SocketServer } from "socket.io";
 import app from "./app";
 import { connectDB } from "./config/database";
 import { connectRedis } from "./config/redis";
 import { initSocketHandlers } from "./services/socket.service";
+import { setIO } from "./config/socket";
 
 const PORT = process.env.PORT || 4000;
 const httpServer = http.createServer(app);
@@ -46,7 +45,7 @@ const io = new SocketServer(httpServer, {
             o === origin ||
             origin.endsWith(".ngrok-free.app") ||
             origin.endsWith(".ngrok.app") ||
-            origin.endsWith(".vercel.app")
+            origin.endsWith(".vercel.app"),
         )
       ) {
         return callback(null, true);
@@ -61,15 +60,13 @@ const io = new SocketServer(httpServer, {
 
 setIO(io);
 
-
-
 // Initialize socket event handlers
 initSocketHandlers(io);
+
 const startServer = async (): Promise<void> => {
   try {
     await connectDB();
     await connectRedis();
-
     httpServer.listen(PORT, () => {
       console.log(
         `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`,
@@ -93,5 +90,4 @@ process.on("SIGTERM", () => {
 });
 
 startServer();
-
 export { io };

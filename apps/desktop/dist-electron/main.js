@@ -1,6 +1,6 @@
 "use strict";
 const n = require("electron"),
-  o = require("node:path"),
+  o = require("path"),
   a = process.env.NODE_ENV === "development";
 let e = null;
 const t = () => {

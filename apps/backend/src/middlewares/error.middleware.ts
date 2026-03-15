@@ -1,22 +1,38 @@
-// backend/src/middlewares/error.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-
-interface AppError extends Error {
-  statusCode?: number;
-  isOperational?: boolean;
-}
+import { AppError } from '../utils/errors';
+import { captureException } from '../config/sentry';
 
 export const errorHandler = (
-  err: AppError,
-  _req: Request,
+  err: AppError | Error,
+  req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ): void => {
-  const statusCode = err.statusCode || 500;
-  const message = err.isOperational ? err.message : 'Internal server error';
+  const appError = err instanceof AppError ? err : null;
+  const statusCode = appError?.statusCode ?? 500;
+  const isOperational = appError?.isOperational ?? false;
+
+  // Sentry Capture
+  if (statusCode >= 500 && !isOperational) {
+    captureException(err, {
+      userId: (req as Request & { user?: { _id?: unknown } }).user?._id?.toString(),
+      tags: {
+        statusCode: String(statusCode),
+        method: req.method,
+        path: req.path,
+      },
+      extra: {
+        contentType: req.headers['content-type'],
+        userAgent: req.headers['user-agent'],
+      },
+    });
+  }
+
+  // Response
+  const message = isOperational ? err.message : 'Internal server error';
 
   if (process.env.NODE_ENV === 'development') {
-    console.error('Error:', err);
+    console.error(`[Error ${statusCode}]`, err);
   }
 
   res.status(statusCode).json({
