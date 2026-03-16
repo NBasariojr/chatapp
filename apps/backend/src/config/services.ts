@@ -14,7 +14,7 @@ export const serviceConfig = {
     bufferMaxEntries: 0,
     bufferCommands: false,
   },
-  
+
   // JWT Service
   jwt: {
     secret: env.JWT_SECRET,
@@ -22,19 +22,13 @@ export const serviceConfig = {
     issuer: "chatapp",
     audience: "chatapp-users",
   },
-  
+
   // Email Service
   email: {
-    user: env.EMAIL_USER,
-    pass: env.EMAIL_PASS,
+    resendApiKey: env.RESEND_API_KEY,
     from: env.EMAIL_FROM,
-    pool: true,
-    maxConnections: 5,
-    maxMessages: 100,
-    rateDelta: 1000,
-    rateLimit: 5,
   },
-  
+
   // OAuth Services
   oauth: {
     google: {
@@ -49,7 +43,7 @@ export const serviceConfig = {
       redirectUri: `${env.CLIENT_URL}/auth/github/callback`,
     },
   },
-  
+
   // Redis Service
   redis: {
     url: env.REDIS_URL,
@@ -61,7 +55,7 @@ export const serviceConfig = {
     connectTimeout: 10000,
     lazyConnect: true,
   },
-  
+
   // Socket Service
   socket: {
     cors: {
@@ -72,13 +66,13 @@ export const serviceConfig = {
     pingInterval: 25000,
     maxHttpBufferSize: 1e8, // 100 MB
   },
-  
+
   // Media Service
   media: {
     uploadPath: "./uploads",
     allowedMimeTypes: [
       "image/jpeg",
-      "image/png", 
+      "image/png",
       "image/gif",
       "image/webp",
       "application/pdf",
@@ -86,7 +80,7 @@ export const serviceConfig = {
     ],
     maxSizeBytes: 10 * 1024 * 1024, // 10MB
   },
-  
+
   // Rate Limiting Service
   rateLimit: {
     windowMs: 15 * 60 * 1000, // 15 minutes
