@@ -51,6 +51,8 @@ interface MessageThreadProps {
   onEditMessage: (id: string, content: string) => void;
   onDeleteMessage: (id: string) => void;
   onTyping?: (typing: boolean) => void;
+  showDetails?: boolean;
+  onToggleDetails?: () => void;
 }
 
 const formatTime = (ts: Date | string) =>
@@ -74,6 +76,8 @@ const MessageThread = ({
   onEditMessage,
   onDeleteMessage,
   onTyping,
+  showDetails,
+  onToggleDetails,
 }: MessageThreadProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -172,7 +176,7 @@ const MessageThread = ({
         <div className="flex items-center space-x-2">
           <Button variant="ghost" size="icon"><Icon name="Phone" size={20} /></Button>
           <Button variant="ghost" size="icon"><Icon name="Video" size={20} /></Button>
-          <Button variant="ghost" size="icon"><Icon name="MoreVertical" size={20} /></Button>
+          <Button variant="ghost" size="icon" onClick={onToggleDetails}><Icon name="MoreVertical" size={20} /></Button>
         </div>
       </div>
 
@@ -198,7 +202,7 @@ const MessageThread = ({
                   <div className={`flex max-w-[70%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
                     {showAvatar && !isMe && (
                       <div className="flex-shrink-0 mr-2">
-                        <ProfileView user={message.sender} showFullName={false} showStatus={false} size="sm" currentUser={currentUser} />
+                        <ProfileView user={message.sender} showFullName={false} showName={false} showStatus={false} size="sm" currentUser={currentUser} />
                       </div>
                     )}
                     {!showAvatar && !isMe && <div className="w-8 mr-2" />}

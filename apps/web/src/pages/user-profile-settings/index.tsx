@@ -260,10 +260,10 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="pt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="pt-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Page Header */}
-          <div className="mb-8">
+          <div className="mb-6">
             <div className="flex items-center space-x-3 mb-2">
               <Button
                 variant="ghost"
@@ -273,16 +273,16 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
               >
                 <AppIcon name="ArrowLeft" size={20} />
               </Button>
-              <h1 className="text-3xl font-bold text-foreground">Account Settings</h1>
+              <h1 className="text-2xl font-bold text-foreground">Account Settings</h1>
             </div>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               Manage your profile, security, privacy, and notification preferences
             </p>
           </div>
 
           {/* Save Message */}
           {saveMessage && (
-            <div className="mb-6 bg-success/10 border border-success/20 rounded-lg p-4 animate-scale-in">
+            <div className="mb-4 bg-success/10 border border-success/20 rounded-lg p-3 animate-scale-in">
               <div className="flex items-center space-x-2">
                 <AppIcon name="CheckCircle" size={16} className="text-success" />
                 <span className="text-sm text-success font-medium">{saveMessage}</span>
@@ -290,10 +290,10 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Sidebar Navigation */}
             <div className="lg:col-span-1">
-              <div className="bg-card border border-border rounded-lg p-4 sticky top-24">
+              <div className="bg-card border border-border rounded-lg p-4">
                 <nav className="space-y-2">
                   {tabs.map((tab) => (
                     <button
@@ -332,9 +332,9 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
 
             {/* Main Content */}
             <div className="lg:col-span-3">
-              <div className="bg-card border border-border rounded-lg p-6 min-h-[600px]">
+              <div className="bg-card border border-border rounded-lg p-6">
                 {isSaving && (
-                  <div className="mb-6 flex items-center space-x-2 text-muted-foreground">
+                  <div className="mb-4 flex items-center space-x-2 text-muted-foreground">
                     <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                     <span className="text-sm">Saving changes...</span>
                   </div>

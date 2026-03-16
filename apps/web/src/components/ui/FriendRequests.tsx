@@ -30,6 +30,23 @@ const FriendRequests = ({ isOpen, onClose, onRequestHandled }: FriendRequestsPro
     if (!isOpen) onRequestHandled?.();
   }, [isOpen, onRequestHandled]);
 
+  // Escape key + body scroll lock
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "";
+    };
+  }, [isOpen, onClose]);
+
   const fetchRequests = async () => {
     setLoading(true);
     setError(null);
@@ -72,81 +89,53 @@ const FriendRequests = ({ isOpen, onClose, onRequestHandled }: FriendRequestsPro
   if (!isOpen) return null;
 
   return (
-    // Backdrop — clicking outside closes the panel
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-background/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
       onClick={onClose}
     >
-      {/* Panel — stops click from closing when clicking inside */}
       <div
-        className="relative flex flex-col w-full max-w-sm mx-4 mt-20 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
-        style={{ maxHeight: "calc(100vh - 120px)" }}
+        className="flex flex-col h-full max-w-2xl mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
 
-        {/* ── Header ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-card">
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between p-4 border-b border-border bg-card">
           <div className="flex items-center space-x-3">
-            {/* Teal icon badge — matches primary color */}
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <AppIcon name="UserPlus" size={18} className="text-primary" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-foreground leading-tight">
-                Friend Requests
-              </h2>
-              {/* Live count badge */}
-              {requests.length > 0 && !loading && (
-                <p className="text-xs text-muted-foreground">
-                  {requests.length} pending
-                </p>
-              )}
-            </div>
+            <AppIcon name="UserPlus" size={24} className="text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Friend Requests</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground"
-          >
-            <AppIcon name="X" size={16} />
-          </button>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <AppIcon name="X" size={20} />
+          </Button>
         </div>
 
-        {/* ── Content ────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        {/* ── Content ── */}
+        <div className="flex-1 overflow-y-auto p-4 bg-background">
 
           {/* Loading state */}
           {loading && (
-            <div className="flex flex-col items-center justify-center py-16 space-y-3">
-              <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-              <p className="text-sm text-muted-foreground">Loading requests...</p>
+            <div className="flex items-center justify-center py-8 space-x-2 text-muted-foreground">
+              <AppIcon name="Loader2" size={16} className="animate-spin" />
+              <span>Loading requests...</span>
             </div>
           )}
 
           {/* Error state */}
           {!loading && error && (
-            <div className="flex flex-col items-center justify-center py-16 px-6 text-center space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center">
-                <AppIcon name="AlertCircle" size={22} className="text-destructive" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground mb-1">Something went wrong</p>
-                <p className="text-xs text-muted-foreground">{error}</p>
-              </div>
-              <Button size="sm" variant="outline" onClick={fetchRequests}>
-                <AppIcon name="RefreshCw" size={14} className="mr-2" />
-                Try again
-              </Button>
+            <div className="flex items-center justify-center py-8 space-x-2 text-destructive">
+              <AppIcon name="AlertCircle" size={16} />
+              <span className="text-sm">{error}</span>
             </div>
           )}
 
           {/* Empty state */}
           {!loading && !error && requests.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 px-6 text-center space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-1">
-                <AppIcon name="Users" size={26} className="text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium text-foreground">No pending requests</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <AppIcon name="Users" size={48} className="text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">
+                No pending requests
+              </h3>
+              <p className="text-muted-foreground text-sm">
                 When someone sends you a friend request, it will appear here.
               </p>
             </div>
@@ -154,64 +143,73 @@ const FriendRequests = ({ isOpen, onClose, onRequestHandled }: FriendRequestsPro
 
           {/* Request list */}
           {!loading && !error && requests.length > 0 && (
-            <div className="p-3 space-y-2">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground mb-4">
+                {requests.length} pending request{requests.length === 1 ? "" : "s"}
+              </p>
               {requests.map((user) => (
                 <div
                   key={user._id}
-                  className="flex items-center gap-3 p-3 rounded-xl border border-border bg-background hover:bg-accent/20 transition-colors duration-150"
+                  className="w-full p-3 bg-card hover:bg-accent/50 rounded-lg border border-border transition-colors duration-200 cursor-pointer"
                 >
-                  {/* Avatar with initials fallback */}
-                  <div className="relative flex-shrink-0">
-                    <div className="w-11 h-11 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                      <span className="text-sm font-semibold text-primary">
-                        {getInitials(user.username)}
-                      </span>
+                  <div className="flex items-center space-x-3">
+                    {/* Avatar with initials fallback */}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
+                        <AppIcon name="User" size={16} />
+                      </div>
+                      {/* Online indicator dot */}
+                      <div
+                        className={`w-2 h-2 rounded-full absolute -bottom-0.5 -right-0.5 border-2 border-card ${
+                          user.isOnline ? "bg-success" : "bg-muted-foreground"
+                        }`}
+                      />
                     </div>
-                    {/* Online indicator dot */}
-                    <span
-                      className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card ${
-                        user.isOnline ? "bg-green-500" : "bg-muted-foreground"
-                      }`}
-                    />
-                  </div>
 
-                  {/* Name + status */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {user.username}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {user.isOnline ? "Online now" : "Offline"}
-                    </p>
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {user.username}
+                      </p>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <div className="flex items-center space-x-2">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              user.isOnline ? "bg-success" : "bg-muted-foreground"
+                            }`}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {user.isOnline ? "Online" : "Offline"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {/* Reject button */}
+                          <button
+                            onClick={() => handleReject(user._id)}
+                            disabled={rejecting === user._id || accepting === user._id}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive text-muted-foreground transition-colors disabled:opacity-40"
+                            title="Reject"
+                          >
+                            {rejecting === user._id
+                              ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                              : <AppIcon name="X" size={14} />
+                            }
+                          </button>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Reject — ghost/outline */}
-                    <button
-                      onClick={() => handleReject(user._id)}
-                      disabled={rejecting === user._id || accepting === user._id}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive text-muted-foreground transition-colors disabled:opacity-40"
-                      title="Reject"
-                    >
-                      {rejecting === user._id
-                        ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                        : <AppIcon name="X" size={14} />
-                      }
-                    </button>
-
-                    {/* Accept — primary filled */}
-                    <button
-                      onClick={() => handleAccept(user._id)}
-                      disabled={accepting === user._id || rejecting === user._id}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-40"
-                      title="Accept"
-                    >
-                      {accepting === user._id
-                        ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                        : <AppIcon name="Check" size={14} />
-                      }
-                    </button>
+                          {/* Accept button */}
+                          <button
+                            onClick={() => handleAccept(user._id)}
+                            disabled={accepting === user._id || rejecting === user._id}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-40"
+                            title="Accept"
+                          >
+                            {accepting === user._id
+                              ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                              : <AppIcon name="Check" size={14} />
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -219,14 +217,19 @@ const FriendRequests = ({ isOpen, onClose, onRequestHandled }: FriendRequestsPro
           )}
         </div>
 
-        {/* ── Footer ─────────────────────────────────────────────── */}
-        {!loading && !error && requests.length > 0 && (
-          <div className="px-5 py-3 border-t border-border bg-card">
-            <p className="text-xs text-muted-foreground text-center">
-              Accepting a request lets you chat with this person
-            </p>
+        {/* ── Footer ── */}
+        <div className="p-4 border-t border-border bg-card">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              Press{" "}
+              <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Esc</kbd>{" "}
+              to close
+            </span>
+            {requests.length > 0 && (
+              <span>{requests.length} request{requests.length === 1 ? "" : "s"}</span>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

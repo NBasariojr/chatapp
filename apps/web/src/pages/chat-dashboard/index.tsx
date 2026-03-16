@@ -3,8 +3,18 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "redux/store";
-import { fetchRooms, fetchMessages, setActiveRoom } from "redux/slices/chatSlice";
-import { connectSocket, disconnectSocket, joinRoom, sendTyping, stopTyping } from "services/socket.service";
+import {
+  fetchRooms,
+  fetchMessages,
+  setActiveRoom,
+} from "redux/slices/chatSlice";
+import {
+  connectSocket,
+  disconnectSocket,
+  joinRoom,
+  sendTyping,
+  stopTyping,
+} from "services/socket.service";
 import { chatService } from "services/chat.service";
 import Icon from "components/AppIcon";
 import Header from "components/ui/Header";
@@ -16,7 +26,9 @@ const ChatDashboard = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { user, token } = useSelector((state: RootState) => state.auth);
-  const { rooms, messages, activeRoomId } = useSelector((state: RootState) => state.chat);
+  const { rooms, messages, activeRoomId } = useSelector(
+    (state: RootState) => state.chat,
+  );
 
   const [showDetails, setShowDetails] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -25,7 +37,10 @@ const ChatDashboard = () => {
   const activeMessages = activeRoomId ? (messages[activeRoomId] ?? []) : [];
 
   useEffect(() => {
-    if (!token) { navigate("/login"); return; }
+    if (!token) {
+      navigate("/login");
+      return;
+    }
     connectSocket(token);
     dispatch(fetchRooms());
 
@@ -54,70 +69,110 @@ const ChatDashboard = () => {
     fileSize?: string;
   }) => {
     if (!activeRoomId) return;
-    await chatService.sendMessage(activeRoomId, messageData.content, messageData.type);
+    await chatService.sendMessage(
+      activeRoomId,
+      messageData.content,
+      messageData.type,
+    );
   };
 
-  const handleEditMessage = (_id: string, _content: string) => { /* TODO */ };
-  const handleDeleteMessage = (_id: string) => { /* TODO */ };
+  const handleEditMessage = (_id: string, _content: string) => {
+    /* TODO */
+  };
+  const handleDeleteMessage = (_id: string) => {
+    /* TODO */
+  };
 
   const currentUser = user
-    ? { id: user._id, name: user.username, avatar: user.avatar, status: "online" as const, role: user.role }
+    ? {
+        id: user._id,
+        name: user.username,
+        avatar: user.avatar,
+        status: "online" as const,
+        role: user.role,
+      }
     : { id: "", name: "", status: "online" as const };
 
-  const conversations = (rooms?.map((room) => ({
-    id: room._id,
-    type: room.isGroup ? ("group" as const) : ("direct" as const),
-    name: room.name || (
-      room.isGroup
-        ? room.participants?.map((p: { username: string }) => p.username).join(", ")
-        : room.participants?.find((p: { _id: string }) => p._id !== user?._id)?.username ?? "Unknown"
-    ),
-    avatar: room.avatar,
-    participants: (room.participants ?? []).map((p: {
-      _id: string; username: string; avatar?: string; isOnline?: boolean; role?: string;
-    }) => ({
-      id: p._id,
-      name: p.username,
-      avatar: p.avatar,
-      status: p.isOnline ? ("online" as const) : ("offline" as const),
-      role: p.role,
-    })),
-    lastMessage: room.lastMessage ? {
-      id: room.lastMessage._id,
-      content: room.lastMessage.content,
-      type: room.lastMessage.type,
-      timestamp: room.lastMessage.createdAt,
-      sender: {
-        id: room.lastMessage.sender?._id ?? room.lastMessage.sender,
-        name: room.lastMessage.sender?.username ?? "Unknown",
-      },
-    } : undefined,
-    unreadCount: 0,
-  }))) ?? [];
+  const conversations =
+    rooms?.map((room) => ({
+      id: room._id,
+      type: room.isGroup ? ("group" as const) : ("direct" as const),
+      name:
+        room.name ||
+        (room.isGroup
+          ? room.participants
+              ?.map((p: { username: string }) => p.username)
+              .join(", ")
+          : (room.participants?.find(
+              (p: { _id: string }) => p._id !== user?._id,
+            )?.username ?? "Unknown")),
+      avatar: room.avatar,
+      participants: (room.participants ?? []).map(
+        (p: {
+          _id: string;
+          username: string;
+          avatar?: string;
+          isOnline?: boolean;
+          role?: string;
+        }) => ({
+          id: p._id,
+          name: p.username,
+          avatar: p.avatar,
+          status: p.isOnline ? ("online" as const) : ("offline" as const),
+          role: p.role,
+        }),
+      ),
+      lastMessage: room.lastMessage
+        ? {
+            id: room.lastMessage._id,
+            content: room.lastMessage.content,
+            type: room.lastMessage.type,
+            timestamp: room.lastMessage.createdAt,
+            sender: {
+              id: room.lastMessage.sender?._id ?? room.lastMessage.sender,
+              name: room.lastMessage.sender?.username ?? "Unknown",
+            },
+          }
+        : undefined,
+      unreadCount: 0,
+    })) ?? [];
 
-  const mappedMessages = activeMessages.map((m: {
-    _id: string; content: string; type: string;
-    sender: { _id: string; username: string; avatar?: string; role?: string };
-    createdAt: string; status?: string;
-  }) => ({
-    id: m._id,
-    content: m.content,
-    type: m.type as "text" | "image" | "file",
-    sender: { id: m.sender._id, name: m.sender.username, avatar: m.sender.avatar, role: m.sender.role },
-    timestamp: new Date(m.createdAt),
-    status: (m.status ?? "sent") as "sent" | "delivered" | "read",
-  }));
+  const mappedMessages = activeMessages.map(
+    (m: {
+      _id: string;
+      content: string;
+      type: string;
+      sender: { _id: string; username: string; avatar?: string; role?: string };
+      createdAt: string;
+      status?: string;
+    }) => ({
+      id: m._id,
+      content: m.content,
+      type: m.type as "text" | "image" | "file",
+      sender: {
+        id: m.sender._id,
+        name: m.sender.username,
+        avatar: m.sender.avatar,
+        role: m.sender.role,
+      },
+      timestamp: new Date(m.createdAt),
+      status: (m.status ?? "sent") as "sent" | "delivered" | "read",
+    }),
+  );
 
   const mappedActive = activeConversation
-    ? conversations.find((c) => c.id === activeRoomId) ?? null
+    ? (conversations.find((c) => c.id === activeRoomId) ?? null)
     : null;
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
-      <Header />
+      {(!isMobile || !mappedActive) && <Header />}
 
       {/* Main area below fixed header */}
-      <div className="flex flex-1 overflow-hidden" style={{ paddingTop: "64px" }}>
+      <div
+        className="relative flex flex-1 overflow-hidden"
+        style={{ paddingTop: !isMobile || !mappedActive ? "64px" : "0" }}
+      >
         {/* ── Sidebar ── */}
         <div
           className={[
@@ -133,7 +188,6 @@ const ChatDashboard = () => {
             currentUser={currentUser}
           />
         </div>
-
         {/* ── Message Thread ── */}
         <div
           className={[
@@ -153,30 +207,31 @@ const ChatDashboard = () => {
                 typing ? sendTyping(activeRoomId) : stopTyping(activeRoomId);
               }
             }}
+            showDetails={showDetails}
+            onToggleDetails={() => setShowDetails(!showDetails)}
           />
         </div>
 
-        {/* ── Details Panel ── */}
-        {showDetails && !isMobile && mappedActive && (
-          <ConversationDetails
-            conversation={mappedActive}
-            onClose={() => setShowDetails(false)}
-            currentUser={currentUser}
-          />
-        )}
+        {showDetails &&
+          mappedActive &&
+          (isMobile ? (
+            <div className="fixed inset-0 z-50 flex flex-col bg-background">
+              <ConversationDetails
+                conversation={mappedActive}
+                onClose={() => setShowDetails(false)}
+                onBack={() => setShowDetails(false)} // ← back arrow
+                currentUser={currentUser}
+                className="w-full"
+              />
+            </div>
+          ) : (
+            <ConversationDetails
+              conversation={mappedActive}
+              onClose={() => setShowDetails(false)}
+              currentUser={currentUser}
+            />
+          ))}
       </div>
-
-      {/* Details toggle */}
-      {activeConversation && !isMobile && (
-        <div className="fixed top-4 right-4 z-50">
-          <button
-            onClick={() => setShowDetails(!showDetails)}
-            className="p-2 bg-card border border-border rounded-lg shadow-lg hover:bg-accent/50 transition-colors"
-          >
-            <Icon name={showDetails ? "PanelRightClose" : "PanelRightOpen"} size={20} />
-          </button>
-        </div>
-      )}
     </div>
   );
 };

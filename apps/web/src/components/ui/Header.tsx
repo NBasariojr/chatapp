@@ -6,6 +6,7 @@ import type { RootState } from "redux/store";
 import AppIcon from "../../components/AppIcon";
 import Button from "../../components/ui/Button";
 import NotificationBadge from "../../components/ui/NotificationBadge";
+import NotificationPanel from "../../components/ui/NotificationPanel";
 import UserMenu from "../../components/ui/UserMenu";
 import SearchOverlay from "../../components/ui/SearchOverlay";
 import FriendRequests from "../../components/ui/FriendRequests";
@@ -52,6 +53,7 @@ const Header = () => {
 
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isFriendRequestsOpen, setIsFriendRequestsOpen] = useState(false);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [friendRequestCount, setFriendRequestCount] = useState(0);
 
     // Fetch friend requests count
@@ -183,9 +185,10 @@ const Header = () => {
                             <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => setIsNotificationsOpen((prev) => !prev)}
                                 className="hover:bg-accent/50 transition-colors duration-200"
                             >
-                                <AppIcon name="Bell" size={20} />
+                                <AppIcon name={isNotificationsOpen ? "X" : "Bell"} size={20} />
                             </Button>
                             {totalUnread > 0 && (
                                 <NotificationBadge
@@ -215,6 +218,10 @@ const Header = () => {
                 isOpen={isFriendRequestsOpen}
                 onClose={() => setIsFriendRequestsOpen(false)}
                 onRequestHandled={handleFriendRequestHandled}
+            />
+            <NotificationPanel
+                isOpen={isNotificationsOpen}
+                onClose={() => setIsNotificationsOpen(false)}
             />
         </>
     );
