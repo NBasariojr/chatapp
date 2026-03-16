@@ -1,27 +1,15 @@
-import * as nodemailer from 'nodemailer';
-import { Transporter } from 'nodemailer';
-import { email } from '../config';
+// apps/backend/src/utils/email.ts
+import { Resend } from 'resend';
+import { email as emailConfig } from '../config';
 
-let transporter: Transporter | null = null;
+let resendClient: Resend | null = null;
 
-const getTransporter = (): Transporter => {
-  if (transporter) return transporter;
-
-  transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { 
-      user: email.user, 
-      pass: email.pass 
-    },
-    pool: true,
-    maxConnections: email.maxConnections,
-    maxMessages: email.maxMessages,
-  });
-
-  return transporter;
+const getResend = (): Resend => {
+  if (resendClient) return resendClient;
+  resendClient = new Resend(emailConfig.resendApiKey);
+  return resendClient;
 };
 
-// Send helper
 interface SendEmailOptions {
   to: string;
   subject: string;
@@ -29,14 +17,14 @@ interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
-  const mailer = getTransporter();
-
-  await mailer.sendMail({
-    from: email.from,
-    to: options.to,
+  const client = getResend();
+  const { error } = await client.emails.send({
+    from: emailConfig.from,
+    to:   options.to,
     subject: options.subject,
     html: options.html,
   });
+  if (error) throw new Error(`Resend delivery failed: ${error.message}`);
 };
 
 // Email templates
