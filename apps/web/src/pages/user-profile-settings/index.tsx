@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { User } from '@chatapp/shared';
 import AppIcon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
+import Header from '../../components/ui/Header';             // ← ADD THIS
 import ProfileInformation from './components/ProfileInformation';
 import AccountSecurity from './components/AccountSecurity';
 import PrivacySettings from './components/PrivacySettings';
@@ -51,12 +52,6 @@ interface TabItem {
   variant?: 'default' | 'destructive';
 }
 
-interface NotificationCounts {
-  messages: number;
-  groups: number;
-  total: number;
-}
-
 interface SecurityData {
   type: 'password' | 'twoFactor' | 'terminateSession';
   data?: any;
@@ -76,6 +71,14 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
   const [activeTab, setActiveTab] = useState<string>('profile');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<string>('');
+
+  // ── Same isMobile detection as ChatDashboard ──────────────────────────────
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const tabs: TabItem[] = [
     {
@@ -111,36 +114,17 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
     }
   ];
 
-  const notificationCounts: NotificationCounts = {
-    messages: 3,
-    groups: 1,
-    total: 4
-  };
-
   useEffect(() => {
-    // Simulate loading user data
-    const loadUserData = () => {
-      // In a real app, this would fetch from an API
-      console.log('Loading user profile settings...');
-    };
-    
-    loadUserData();
+    console.log('Loading user profile settings...');
   }, []);
 
-  const handleNavigation = (path: string) => {
-    navigate(path);
-  };
-
-  const showSaveMessage = (message: string, type: 'success' | 'error' = 'success') => {
+  const showSaveMessage = (message: string) => {
     setSaveMessage(message);
     setTimeout(() => setSaveMessage(''), 3000);
   };
 
   const handleUpdateProfile = async (profileData: any) => {
     setIsSaving(true);
-    
-    // In a real app, this would make an API call to update the profile
-    // For now, just show success message
     setTimeout(() => {
       setIsSaving(false);
       showSaveMessage('Profile updated successfully');
@@ -149,15 +133,13 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
 
   const handleUpdateSecurity = async (securityData: SecurityData) => {
     setIsSaving(true);
-    
-    // In a real app, this would make an API call to update security settings
     setTimeout(() => {
       if (securityData?.type === 'password') {
         showSaveMessage('Password updated successfully');
       } else if (securityData?.type === 'twoFactor') {
         showSaveMessage(
-          securityData?.data?.enabled 
-            ? 'Two-factor authentication enabled' 
+          securityData?.data?.enabled
+            ? 'Two-factor authentication enabled'
             : 'Two-factor authentication disabled'
         );
       } else if (securityData?.type === 'terminateSession') {
@@ -169,8 +151,6 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
 
   const handleUpdatePrivacy = async (privacySettings: PrivacySettingsData) => {
     setIsSaving(true);
-    
-    // In a real app, this would make an API call to update privacy settings
     setTimeout(() => {
       setIsSaving(false);
       showSaveMessage('Privacy settings updated');
@@ -179,8 +159,6 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
 
   const handleUpdateNotifications = async (notificationSettings: NotificationSettingsData) => {
     setIsSaving(true);
-    
-    // In a real app, this would make an API call to update notification settings
     setTimeout(() => {
       setIsSaving(false);
       showSaveMessage('Notification preferences updated');
@@ -188,17 +166,14 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
   };
 
   const handleDeleteAccount = async (deletionData: DeletionData) => {
-    // In a real app, this would handle account deletion
     console.log('Account deletion requested:', deletionData);
-    
+
     if (deletionData?.dataExport) {
-      // Trigger data export
       const exportData = {
         profile: currentUser,
         deletionReason: deletionData?.reason,
         exportDate: new Date().toISOString()
       };
-      
       const dataStr = JSON.stringify(exportData, null, 2);
       const dataBlob = new Blob([dataStr], { type: 'application/json' });
       const url = URL.createObjectURL(dataBlob);
@@ -208,8 +183,7 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
       link.click();
       URL.revokeObjectURL(url);
     }
-    
-    // Simulate account deletion process
+
     setTimeout(() => {
       alert('Account deletion completed. You will be redirected to login page.');
       navigate('/login');
@@ -219,63 +193,63 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
   const renderTabContent = () => {
     switch (activeTab) {
       case 'profile':
-        return (
-          <ProfileInformation
-            currentUser={currentUser}
-            onUpdateProfile={handleUpdateProfile}
-          />
-        );
+        return <ProfileInformation currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />;
       case 'security':
-        return (
-          <AccountSecurity
-            currentUser={currentUser}
-            onUpdateSecurity={handleUpdateSecurity}
-          />
-        );
+        return <AccountSecurity currentUser={currentUser} onUpdateSecurity={handleUpdateSecurity} />;
       case 'privacy':
-        return (
-          <PrivacySettings
-            currentUser={currentUser}
-            onUpdatePrivacy={handleUpdatePrivacy}
-          />
-        );
+        return <PrivacySettings currentUser={currentUser} onUpdatePrivacy={handleUpdatePrivacy} />;
       case 'notifications':
-        return (
-          <NotificationPreferences
-            currentUser={currentUser}
-            onUpdateNotifications={handleUpdateNotifications}
-          />
-        );
+        return <NotificationPreferences currentUser={currentUser} onUpdateNotifications={handleUpdateNotifications} />;
       case 'deletion':
-        return (
-          <AccountDeletion
-            currentUser={currentUser}
-            onDeleteAccount={handleDeleteAccount}
-          />
-        );
+        return <AccountDeletion currentUser={currentUser} onDeleteAccount={handleDeleteAccount} />;
       default:
         return null;
     }
   };
 
+  /*
+   * ── Header offset math (mirrors ChatDashboard pattern) ───────────────────
+   *
+   * Header.tsx structure:
+   *   Desktop: single bar           → h-16       = 64px
+   *   Mobile:  h-16 bar             = 64px
+   *            + md:hidden nav strip = border-t + py-2 + buttons (flex-col py-2
+   *              + icon-16 + space-y-1-4 + text-xs ~14px) ≈ 66px
+   *            Total mobile          ≈ 130px
+   *
+   * paddingTop on the scroll container (not margin on outer div) — same
+   * technique used in ChatDashboard's style={{ paddingTop: "64px" }}.
+   * ─────────────────────────────────────────────────────────────────────────
+   */
+  const headerOffset = isMobile ? '130px' : '64px';
+
   return (
-    <div className="min-h-screen bg-background">
-      <div className="pt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="flex flex-col min-h-screen bg-background">
+
+      {/* ✅ Header rendered inside the page — same as ChatDashboard */}
+      <Header />
+
+      {/* ✅ paddingTop clears the fixed header on both breakpoints */}
+      <div style={{ paddingTop: headerOffset }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6">
+
           {/* Page Header */}
           <div className="mb-6">
-            <div className="flex items-center space-x-3 mb-2">
+            <div className="flex items-center gap-3 mb-1">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate('/chat-dashboard')}
-                className="hover:bg-accent/50"
+                className="hover:bg-accent/50 shrink-0"
               >
                 <AppIcon name="ArrowLeft" size={20} />
               </Button>
-              <h1 className="text-2xl font-bold text-foreground">Account Settings</h1>
+              <h1 className="text-xl md:text-2xl font-bold text-foreground leading-tight">
+                Account Settings
+              </h1>
             </div>
-            <p className="text-muted-foreground text-sm">
+            {/* pl-11 = icon (w-9) + gap (12px) — aligns subtitle under title */}
+            <p className="text-muted-foreground text-sm pl-11">
               Manage your profile, security, privacy, and notification preferences
             </p>
           </div>
@@ -303,20 +277,20 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
                         w-full flex items-center space-x-3 px-3 py-3 rounded-lg text-left transition-colors duration-200
                         ${activeTab === tab.id
                           ? 'bg-primary/10 text-primary border border-primary/20'
-                          : tab.variant === 'destructive' 
-                            ? 'hover:bg-error/10 text-muted-foreground hover:text-error' 
+                          : tab.variant === 'destructive'
+                            ? 'hover:bg-error/10 text-muted-foreground hover:text-error'
                             : 'hover:bg-accent/50 text-muted-foreground hover:text-foreground'
                         }
                       `}
                     >
-                      <AppIcon 
-                        name={tab.icon} 
-                        size={18} 
+                      <AppIcon
+                        name={tab.icon}
+                        size={18}
                         className={
                           activeTab === tab.id
                             ? 'text-primary'
-                            : tab.variant === 'destructive' 
-                              ? 'text-muted-foreground group-hover:text-error' 
+                            : tab.variant === 'destructive'
+                              ? 'text-muted-foreground group-hover:text-error'
                               : 'text-muted-foreground'
                         }
                       />
@@ -343,6 +317,7 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ currentUser }
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>
