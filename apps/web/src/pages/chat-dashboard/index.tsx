@@ -1,16 +1,14 @@
-// web/src/pages/chat-dashboard/index.tsx
+// apps/web/src/pages/chat-dashboard/index.tsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "redux/store";
+import type { ReplyPreview } from "@chatapp/shared";
 import {
   fetchRooms,
   fetchMessages,
   setActiveRoom,
 } from "redux/slices/chatSlice";
 import {
-  connectSocket,
-  disconnectSocket,
   joinRoom,
   sendTyping,
   stopTyping,
@@ -23,7 +21,6 @@ import MessageThread from "./components/MessageThread";
 import ConversationDetails from "./components/ConversationDetails";
 
 const ChatDashboard = () => {
-  const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { user, token } = useSelector((state: RootState) => state.auth);
   const { rooms, messages, activeRoomId } = useSelector(
@@ -34,20 +31,11 @@ const ChatDashboard = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const activeConversation = rooms?.find((r) => r._id === activeRoomId) ?? null;
-  const activeMessages = activeRoomId ? (messages[activeRoomId] ?? []) : [];
+  const activeMessages     = activeRoomId ? (messages[activeRoomId] ?? []) : [];
 
   useEffect(() => {
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-    connectSocket(token);
     dispatch(fetchRooms());
-
-    return () => {
-      disconnectSocket();
-    };
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -67,20 +55,43 @@ const ChatDashboard = () => {
     content: string;
     fileName?: string;
     fileSize?: string;
+    replyTo?: string;
   }) => {
     if (!activeRoomId) return;
     await chatService.sendMessage(
       activeRoomId,
       messageData.content,
       messageData.type,
+      messageData.replyTo,
     );
   };
 
-  const handleEditMessage = (_id: string, _content: string) => {
-    /* TODO */
+  // ← FIXED: was /* TODO */ — now calls the API and lets the socket
+  // event (message:updated) update the Redux store for all clients
+  const handleEditMessage = async (messageId: string, content: string) => {
+    try {
+      await chatService.editMessage(messageId, content);
+      // Note: no manual Redux dispatch needed here.
+      // The backend emits message:updated via socket, which the
+      // socket.service.ts listener catches and dispatches updateMessage().
+      // This keeps the update flow identical for the sender and all
+      // other users in the room.
+    } catch (err) {
+      console.error("[handleEditMessage] Failed:", err);
+    }
   };
-  const handleDeleteMessage = (_id: string) => {
-    /* TODO */
+
+  // ← FIXED: was /* TODO */ — now calls the API and lets the socket
+  // event (message:deleted) update the Redux store for all clients
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await chatService.deleteMessage(messageId);
+      // Same pattern as edit — no manual Redux dispatch.
+      // The backend emits message:deleted via socket, which the
+      // socket.service.ts listener catches and dispatches removeMessage().
+    } catch (err) {
+      console.error("[handleDeleteMessage] Failed:", err);
+    }
   };
 
   const currentUser = user
@@ -145,6 +156,7 @@ const ChatDashboard = () => {
       sender: { _id: string; username: string; avatar?: string; role?: string };
       createdAt: string;
       status?: string;
+      replyTo?: ReplyPreview | string | null;
     }) => ({
       id: m._id,
       content: m.content,
@@ -157,6 +169,7 @@ const ChatDashboard = () => {
       },
       timestamp: new Date(m.createdAt),
       status: (m.status ?? "sent") as "sent" | "delivered" | "read",
+      replyTo: m.replyTo,
     }),
   );
 
@@ -168,7 +181,6 @@ const ChatDashboard = () => {
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       {(!isMobile || !mappedActive) && <Header />}
 
-      {/* Main area below fixed header */}
       <div
         className="relative flex flex-1 overflow-hidden"
         style={{ paddingTop: !isMobile || !mappedActive ? "64px" : "0" }}
@@ -188,6 +200,7 @@ const ChatDashboard = () => {
             currentUser={currentUser}
           />
         </div>
+
         {/* ── Message Thread ── */}
         <div
           className={[
@@ -219,7 +232,7 @@ const ChatDashboard = () => {
               <ConversationDetails
                 conversation={mappedActive}
                 onClose={() => setShowDetails(false)}
-                onBack={() => setShowDetails(false)} // ← back arrow
+                onBack={() => setShowDetails(false)}
                 currentUser={currentUser}
                 className="w-full"
               />

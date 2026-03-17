@@ -26,10 +26,6 @@ const FriendRequests = ({ isOpen, onClose, onRequestHandled }: FriendRequestsPro
     if (isOpen) fetchRequests();
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) onRequestHandled?.();
-  }, [isOpen, onRequestHandled]);
-
   // Escape key + body scroll lock
   useEffect(() => {
     if (!isOpen) return;
@@ -94,7 +90,7 @@ const FriendRequests = ({ isOpen, onClose, onRequestHandled }: FriendRequestsPro
       onClick={onClose}
     >
       <div
-        className="flex flex-col h-full max-w-2xl mx-auto"
+        className="flex flex-col h-full w-full max-w-2xl mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
 
@@ -152,7 +148,7 @@ const FriendRequests = ({ isOpen, onClose, onRequestHandled }: FriendRequestsPro
                   key={user._id}
                   className="w-full p-3 bg-card hover:bg-accent/50 rounded-lg border border-border transition-colors duration-200 cursor-pointer"
                 >
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center justify-between gap-3">
                     {/* Avatar with initials fallback */}
                     <div className="relative flex-shrink-0">
                       <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
@@ -166,48 +162,36 @@ const FriendRequests = ({ isOpen, onClose, onRequestHandled }: FriendRequestsPro
                       />
                     </div>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
                       <p className="text-sm font-medium text-foreground truncate">
                         {user.username}
                       </p>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <div className="flex items-center space-x-2">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              user.isOnline ? "bg-success" : "bg-muted-foreground"
-                            }`}
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            {user.isOnline ? "Online" : "Offline"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {/* Reject button */}
-                          <button
-                            onClick={() => handleReject(user._id)}
-                            disabled={rejecting === user._id || accepting === user._id}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive text-muted-foreground transition-colors disabled:opacity-40"
-                            title="Reject"
-                          >
-                            {rejecting === user._id
-                              ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                              : <AppIcon name="X" size={14} />
-                            }
-                          </button>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Delete button */}
+                        <button
+                          onClick={() => handleReject(user._id)}
+                          disabled={rejecting === user._id || accepting === user._id}
+                          className="h-8 px-3 flex items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive text-muted-foreground text-xs font-medium transition-colors disabled:opacity-40"
+                          title="Delete"
+                        >
+                          {rejecting === user._id
+                            ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            : "Delete"
+                          }
+                        </button>
 
-                          {/* Accept button */}
-                          <button
-                            onClick={() => handleAccept(user._id)}
-                            disabled={accepting === user._id || rejecting === user._id}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-40"
-                            title="Accept"
-                          >
-                            {accepting === user._id
-                              ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                              : <AppIcon name="Check" size={14} />
-                            }
-                          </button>
-                        </div>
+                        {/* Confirm button */}
+                        <button
+                          onClick={() => handleAccept(user._id)}
+                          disabled={accepting === user._id || rejecting === user._id}
+                          className="h-8 px-3 flex items-center justify-center rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors disabled:opacity-40"
+                          title="Confirm"
+                        >
+                          {accepting === user._id
+                            ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            : "Confirm"
+                          }
+                        </button>
                       </div>
                     </div>
                   </div>

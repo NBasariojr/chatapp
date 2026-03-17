@@ -15,7 +15,11 @@ function App() {
   const { token } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      // Token was cleared (logout) — ensure socket is cleaned up
+      disconnectSocket();
+      return;
+    }
 
     dispatch(fetchMe())
       .unwrap()
@@ -36,9 +40,9 @@ function App() {
         // The user still has a valid token in localStorage
       });
 
-    return () => {
-      disconnectSocket();
-    };
+    // NO cleanup return here — we do NOT disconnect on every re-render.
+    // disconnectSocket is only called on logout (token becomes null above).
+    // The socket persists for the entire authenticated session.
   }, [token]);
 
   return <Routes />;

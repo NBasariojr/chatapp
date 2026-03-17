@@ -7,6 +7,7 @@ import Button from "../../../components/ui/Button";
 import ProfileView from "./ProfileView";
 import MessageInput from "./MessageInput";
 import { setActiveRoom } from "../../../redux/slices/chatSlice";
+import type { ReplyPreview } from "@chatapp/shared";
 
 interface Sender {
   id: string;
@@ -26,6 +27,7 @@ interface Message {
   fileName?: string;
   fileSize?: string;
   edited?: boolean;
+  replyTo?: ReplyPreview | string | null;
 }
 
 interface Conversation {
@@ -41,6 +43,14 @@ interface MessageData {
   content: string;
   fileName?: string;
   fileSize?: string;
+  replyTo?: string;
+}
+
+interface ReplyContext {
+  messageId: string;
+  content: string;
+  type: string;
+  senderName: string;
 }
 
 interface MessageThreadProps {
@@ -68,6 +78,14 @@ const formatDate = (ts: Date | string) => {
   return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 };
 
+const getReplyPreviewText = (replyTo: ReplyPreview | string | null | undefined): string => {
+  if (!replyTo || typeof replyTo === "string") return "Original message";
+  if (replyTo.type === "image") return "📷 Photo";
+  if (replyTo.type === "file")  return "📎 File";
+  const text = replyTo.content ?? "";
+  return text.length > 60 ? text.slice(0, 60) + "..." : text;
+};
+
 const MessageThread = ({
   conversation,
   messages,
@@ -79,25 +97,32 @@ const MessageThread = ({
   showDetails,
   onToggleDetails,
 }: MessageThreadProps) => {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState("");
+  const [editingId, setEditingId]       = useState<string | null>(null);
+  const [editContent, setEditContent]   = useState("");
+  const [replyingTo, setReplyingTo]     = useState<ReplyContext | null>(null);
+
+  // Tracks which message is awaiting delete confirmation in the hover toolbar
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const dispatch = useDispatch();
+  const dispatch  = useDispatch();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // Clear both reply context and pending confirmation when switching rooms
+  useEffect(() => {
+    setReplyingTo(null);
+    setConfirmDeleteId(null);
+  }, [conversation?.id]);
 
   const canEdit = (msg: Message) => {
     const mins = (Date.now() - new Date(msg.timestamp).getTime()) / 60000;
@@ -107,6 +132,14 @@ const MessageThread = ({
   const canDelete = (msg: Message) => {
     const hours = (Date.now() - new Date(msg.timestamp).getTime()) / 3600000;
     return msg.sender.id === currentUser.id && hours <= 24;
+  };
+
+  const handleSendMessage = (data: MessageData) => {
+    onSendMessage({
+      ...data,
+      ...(replyingTo && { replyTo: replyingTo.messageId }),
+    });
+    setReplyingTo(null);
   };
 
   const grouped = messages.reduce<Record<string, Message[]>>((acc, msg) => {
@@ -137,7 +170,7 @@ const MessageThread = ({
   return (
     <div className="h-full flex flex-col bg-background">
 
-      {/* ── Header — fixed height, never collapses ── */}
+      {/* ── Header ── */}
       <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-border bg-card">
         <div className="flex items-center space-x-3">
           {isMobile && (
@@ -180,6 +213,7 @@ const MessageThread = ({
         </div>
       </div>
 
+      {/* ── Messages ── */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {Object.entries(grouped).map(([dateKey, dayMessages]) => (
           <div key={dateKey}>
@@ -197,20 +231,68 @@ const MessageThread = ({
                 index === 0 || dayMessages[index - 1].sender.id !== message.sender.id
               );
 
+              const populatedReply =
+                message.replyTo && typeof message.replyTo === "object"
+                  ? (message.replyTo as ReplyPreview)
+                  : null;
+
+              // Whether this message's toolbar is showing a delete confirmation
+              const isConfirmingDelete = confirmDeleteId === message.id;
+
               return (
-                <div key={message.id} className={`flex ${isMe ? "justify-end" : "justify-start"} group`}>
+                <div
+                  key={message.id}
+                  className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
+                  // Clicking outside the toolbar clears any pending confirmation
+                  onClick={() => {
+                    if (isConfirmingDelete) setConfirmDeleteId(null);
+                  }}
+                >
                   <div className={`flex max-w-[70%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
                     {showAvatar && !isMe && (
                       <div className="flex-shrink-0 mr-2">
-                        <ProfileView user={message.sender} showFullName={false} showName={false} showStatus={false} size="sm" currentUser={currentUser} />
+                        <ProfileView
+                          user={message.sender}
+                          showFullName={false}
+                          showName={false}
+                          showStatus={false}
+                          size="sm"
+                          currentUser={currentUser}
+                        />
                       </div>
                     )}
                     {!showAvatar && !isMe && <div className="w-8 mr-2" />}
 
                     <div className={`relative ${isMe ? "mr-2" : ""}`}>
                       <div className={`px-4 py-2 rounded-2xl ${
-                        isMe ? "bg-primary text-primary-foreground" : "bg-card border border-border text-card-foreground"
+                        isMe
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card border border-border text-card-foreground"
                       }`}>
+
+                        {/* Quoted reply bubble */}
+                        {populatedReply && (
+                          <div className={`mb-2 px-3 py-1.5 rounded-lg border-l-2 border-primary/60 ${
+                            isMe ? "bg-primary-foreground/10" : "bg-muted/50"
+                          }`}>
+                            <div className="flex items-center space-x-1 mb-0.5">
+                              <Icon name="CornerUpLeft" size={11} className="text-primary/80 flex-shrink-0" />
+                              <span className={`text-xs font-semibold truncate ${
+                                isMe ? "text-primary-foreground/80" : "text-primary"
+                              }`}>
+                                {typeof populatedReply.sender === "object"
+                                  ? populatedReply.sender.username
+                                  : "Unknown"}
+                              </span>
+                            </div>
+                            <p className={`text-xs truncate ${
+                              isMe ? "text-primary-foreground/70" : "text-muted-foreground"
+                            }`}>
+                              {getReplyPreviewText(populatedReply)}
+                            </p>
+                          </div>
+                        )}
+
                         {editingId === message.id ? (
                           <div className="space-y-2">
                             <textarea
@@ -254,20 +336,97 @@ const MessageThread = ({
                         )}
                       </div>
 
-                      {/* Hover actions */}
+                      {/* ── Hover Toolbar ─────────────────────────────────── */}
                       {editingId !== message.id && (
-                        <div className={`absolute top-0 ${isMe ? "left-0 -translate-x-full" : "right-0 translate-x-full"} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                        <div className={`absolute top-0 ${isMe ? "left-0 -translate-x-full pr-1" : "right-0 translate-x-full pl-1"} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
                           <div className="flex items-center space-x-1 bg-popover border border-border rounded-lg p-1 shadow-lg">
-                            <Button size="xs" variant="ghost"><Icon name="MessageCircle" size={14} /></Button>
-                            {canEdit(message) && (
-                              <Button size="xs" variant="ghost" onClick={() => { setEditingId(message.id); setEditContent(message.content); }}>
-                                <Icon name="Edit2" size={14} />
-                              </Button>
-                            )}
-                            {canDelete(message) && (
-                              <Button size="xs" variant="ghost" onClick={() => onDeleteMessage(message.id)}>
-                                <Icon name="Trash2" size={14} />
-                              </Button>
+
+                            {/* ── DELETE CONFIRMATION STATE ────────────────
+                                First click on trash → shows "Delete?" + Yes/No
+                                Clicking Yes → actually deletes
+                                Clicking No (or anywhere outside) → back to normal
+                                This prevents accidental deletions. */}
+                            {isConfirmingDelete ? (
+                              <>
+                                <span className="text-xs text-foreground px-1 whitespace-nowrap">
+                                  Delete?
+                                </span>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteMessage(message.id);
+                                    setConfirmDeleteId(null);
+                                  }}
+                                >
+                                  Yes
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmDeleteId(null);
+                                  }}
+                                >
+                                  No
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                {/* ── NORMAL TOOLBAR STATE ── */}
+
+                                {/* Reply button — sets reply context, shows banner in input */}
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  title="Reply"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReplyingTo({
+                                      messageId: message.id,
+                                      content:    message.content,
+                                      type:       message.type,
+                                      senderName: isMe ? "yourself" : message.sender.name,
+                                    });
+                                  }}
+                                >
+                                  <Icon name="MessageCircle" size={14} />
+                                </Button>
+
+                                {canEdit(message) && (
+                                  <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    title="Edit"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingId(message.id);
+                                      setEditContent(message.content);
+                                    }}
+                                  >
+                                    <Icon name="Edit2" size={14} />
+                                  </Button>
+                                )}
+
+                                {canDelete(message) && (
+                                  <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    title="Delete"
+                                    className="hover:text-destructive hover:bg-destructive/10"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // First click → show confirmation, don't delete yet
+                                      setConfirmDeleteId(message.id);
+                                    }}
+                                  >
+                                    <Icon name="Trash2" size={14} />
+                                  </Button>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -293,9 +452,14 @@ const MessageThread = ({
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Input — fixed at bottom, never scrolls away ── */}
+      {/* ── Input ── */}
       <div className="flex-shrink-0">
-        <MessageInput onSendMessage={onSendMessage} onTyping={onTyping} />
+        <MessageInput
+          onSendMessage={handleSendMessage}
+          onTyping={onTyping}
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
+        />
       </div>
     </div>
   );

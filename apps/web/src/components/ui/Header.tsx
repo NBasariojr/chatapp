@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import type { ComponentProps } from "react";
@@ -56,35 +56,21 @@ const Header = () => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [friendRequestCount, setFriendRequestCount] = useState(0);
 
-    // Fetch friend requests count
-    useEffect(() => {
-        const fetchFriendRequestCount = async () => {
-            try {
-                const requests = await chatService.getFriendRequests();
-                setFriendRequestCount(requests?.length || 0);
-            } catch (error) {
-                console.error('Failed to fetch friend requests:', error);
-            }
-        };
-
-        fetchFriendRequestCount();
-        // Poll for new requests every 30 seconds
-        const interval = setInterval(fetchFriendRequestCount, 30000);
-        return () => clearInterval(interval);
+    const handleFriendRequestHandled = useCallback(async () => {
+        try {
+            const requests = await chatService.getFriendRequests();
+            setFriendRequestCount(requests?.length || 0);
+        } catch (error) {
+            console.error('Failed to fetch friend requests:', error);
+        }
     }, []);
 
-    const handleFriendRequestHandled = () => {
-        // Refresh the friend request count immediately
-        const fetchFriendRequestCount = async () => {
-            try {
-                const requests = await chatService.getFriendRequests();
-                setFriendRequestCount(requests?.length || 0);
-            } catch (error) {
-                console.error('Failed to fetch friend requests:', error);
-            }
-        };
-        fetchFriendRequestCount();
-    };
+    // Fetch friend requests count
+    useEffect(() => {
+        handleFriendRequestHandled(); // initial fetch on mount
+        const interval = setInterval(handleFriendRequestHandled, 30000);
+        return () => clearInterval(interval);
+    }, [handleFriendRequestHandled]);
 
     // Derive total unread from all rooms
     const totalUnread = Object.values(unreadCounts).reduce(

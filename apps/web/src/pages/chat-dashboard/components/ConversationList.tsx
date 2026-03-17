@@ -79,6 +79,7 @@ const ConversationList = ({
     if (type === "file") return `${name}: 📎 File`;
     return `${name}: ${content?.length > 50 ? content.substring(0, 50) + "..." : content ?? ""}`;
   };
+
   return (
     <div className="flex flex-col h-full bg-card border-r border-border">
       {/* Header */}
@@ -123,26 +124,26 @@ const ConversationList = ({
               <button
                 key={conversation.id}
                 onClick={() => onConversationSelect(conversation)}
-                className={`w-full p-3 rounded-lg text-left transition-all duration-200 hover:bg-accent/50 ${activeConversation?.id === conversation.id
-                  ? "bg-accent border border-primary/20"
-                  : "hover:bg-accent/30"
-                  }`}
+                className={`w-full p-3 rounded-lg text-left transition-all duration-200 hover:bg-accent/50 ${
+                  activeConversation?.id === conversation.id
+                    ? "bg-accent border border-primary/20"
+                    : "hover:bg-accent/30"
+                }`}
               >
                 <div className="flex items-start space-x-3">
                   {conversation.type === "direct" ? (() => {
                     const otherPerson = conversation.participants.find(
                       (p) => p.id !== currentUser?.id
                     );
-
                     const displayUser = otherPerson ?? conversation.participants[0];
-
                     if (!displayUser) return null;
 
                     return (
                       <ProfileView
                         user={{ ...displayUser, name: conversation.name, avatar: conversation.avatar }}
                         showFullName={false}
-                        showStatus={true}
+                        showName={false}    // ← hides name + status text
+                        showStatus={true}   // ← keeps the presence indicator dot
                         showLastSeen={false}
                         size="default"
                         currentUser={currentUser}
