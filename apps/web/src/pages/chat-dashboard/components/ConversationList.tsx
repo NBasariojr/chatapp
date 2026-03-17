@@ -1,8 +1,11 @@
-import React, { useState, useMemo } from "react";
-import Icon from "components/AppIcon";
+import React, { useState } from "react";
+import Icon from "../../../components/AppIcon";
 import AppImage from "../../../components/AppImage";
-import Input from "components/ui/Input";
-import ProfileView from "./ProfileView";
+import Button from "../../../components/ui/Button";
+import Input from "../../../components/ui/Input";
+import PresenceIndicator from "../../../components/ui/PresenceIndicator"; // ← added
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Participant {
   id: string;
@@ -15,9 +18,9 @@ interface Participant {
 interface LastMessage {
   id: string;
   content: string;
-  sender: { id: string; name: string };
-  timestamp: Date | string;
   type: string;
+  timestamp: string;
+  sender: { id: string; name: string };
 }
 
 interface Conversation {
@@ -33,22 +36,93 @@ interface Conversation {
 interface ConversationListProps {
   conversations: Conversation[];
   activeConversation: Conversation | null;
-  onConversationSelect: (conversation: Conversation) => void;
+  onConversationSelect: (conversation: { id: string }) => void;
   currentUser: Participant;
 }
 
-const formatTimestamp = (timestamp: Date | string) => {
-  const now = new Date();
-  const messageTime = new Date(timestamp);
-  const diffInHours = (now.getTime() - messageTime.getTime()) / (1000 * 60 * 60);
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  if (diffInHours < 1) {
-    const mins = Math.floor(diffInHours * 60);
-    return mins < 1 ? "now" : `${mins}m`;
-  }
-  if (diffInHours < 24) return `${Math.floor(diffInHours)}h`;
-  return messageTime.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const formatTimestamp = (ts: string): string => {
+  const date = new Date(ts);
+  if (isNaN(date.getTime())) return "";
+
+  const now    = new Date();
+  const today  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor(
+    (today.getTime() - msgDay.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (diffDays === 0)
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7)
+    return date.toLocaleDateString("en-US", { weekday: "short" });
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
+
+const getLastMessagePreview = (
+  msg: LastMessage | undefined,
+  currentUserId: string,
+): string => {
+  if (!msg) return "No messages yet";
+  const prefix = msg.sender.id === currentUserId ? "You: " : "";
+  if (msg.type === "image") return `${prefix}📷 Photo`;
+  if (msg.type === "file")  return `${prefix}📎 File`;
+  const text = msg.content ?? "";
+  return `${prefix}${text.length > 40 ? text.slice(0, 40) + "…" : text}`;
+};
+
+// ─── Avatar sub-component ─────────────────────────────────────────────────────
+
+interface ConversationAvatarProps {
+  conversation: Conversation;
+  currentUserId: string;
+}
+
+const ConversationAvatar = ({
+  conversation,
+  currentUserId,
+}: ConversationAvatarProps) => {
+  const otherParticipant =
+    conversation.type === "direct"
+      ? (conversation.participants.find((p) => p.id !== currentUserId) ??
+          conversation.participants[0])
+      : null;
+
+  return (
+    <div className="relative flex-shrink-0">
+      <div className="w-12 h-12 rounded-full overflow-hidden bg-secondary flex items-center justify-center">
+        {conversation.avatar ? (
+          <AppImage
+            src={conversation.avatar}
+            alt={conversation.name}
+            className="w-full h-full object-cover"
+          />
+        ) : conversation.type === "group" ? (
+          <Icon name="Users" size={20} className="text-muted-foreground" />
+        ) : (
+          <Icon name="User" size={20} className="text-muted-foreground" />
+        )}
+      </div>
+
+      {/* ── Presence indicator — direct chats only, all statuses ── */}
+      {conversation.type === "direct" && otherParticipant?.status && (
+        <PresenceIndicator
+          status={otherParticipant.status}
+          size="default"
+          className="absolute bottom-0 right-0"
+        />
+      )}
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 const ConversationList = ({
   conversations,
@@ -58,38 +132,21 @@ const ConversationList = ({
 }: ConversationListProps) => {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return conversations;
-    const q = searchQuery.toLowerCase();
-    return conversations.filter(
-      (c) =>
-        c.name?.toLowerCase().includes(q) ||
-        c.lastMessage?.content?.toLowerCase().includes(q)
-    );
-  }, [conversations, searchQuery]);
-
-  const getPreview = (conversation: Conversation) => {
-    if (!conversation.lastMessage) return "No messages yet";
-    const { content, sender, type } = conversation.lastMessage;
-    const isMe = sender?.id === currentUser?.id;
-    const name = isMe
-      ? "You"
-      : sender?.name?.split(" ")[0] ?? "Someone";
-    if (type === "image") return `${name}: 📷 Photo`;
-    if (type === "file") return `${name}: 📎 File`;
-    return `${name}: ${content?.length > 50 ? content.substring(0, 50) + "..." : content ?? ""}`;
-  };
+  const filtered = conversations.filter((c) =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   return (
     <div className="flex flex-col h-full bg-card border-r border-border">
-      {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between mb-4">
+      {/* ── Header ── */}
+      <div className="p-4 border-b border-border flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-foreground">Messages</h2>
-          <button className="p-2 hover:bg-accent/50 rounded-lg transition-colors duration-200">
-            <Icon name="Plus" size={20} />
-          </button>
+          <Button variant="ghost" size="icon" title="New conversation">
+            <Icon name="SquarePen" size={20} />
+          </Button>
         </div>
+
         <div className="relative">
           <Input
             type="search"
@@ -106,97 +163,106 @@ const ConversationList = ({
         </div>
       </div>
 
-      {/* List */}
+      {/* ── List ── */}
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <Icon name="MessageCircle" size={48} className="text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium text-foreground mb-2">
-              {searchQuery ? "No conversations found" : "No conversations yet"}
-            </h3>
+          <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+            <Icon
+              name="MessageCircleDashed"
+              size={40}
+              className="text-muted-foreground mb-3"
+            />
             <p className="text-sm text-muted-foreground">
-              {searchQuery ? "Try adjusting your search terms" : "Start a new conversation to get chatting"}
+              {searchQuery
+                ? "No conversations match your search"
+                : "No conversations yet"}
             </p>
           </div>
         ) : (
-          <div className="space-y-1 p-2">
-            {filtered.map((conversation) => (
-              <button
-                key={conversation.id}
-                onClick={() => onConversationSelect(conversation)}
-                className={`w-full p-3 rounded-lg text-left transition-all duration-200 hover:bg-accent/50 ${
-                  activeConversation?.id === conversation.id
-                    ? "bg-accent border border-primary/20"
-                    : "hover:bg-accent/30"
-                }`}
-              >
-                <div className="flex items-start space-x-3">
-                  {conversation.type === "direct" ? (() => {
-                    const otherPerson = conversation.participants.find(
-                      (p) => p.id !== currentUser?.id
-                    );
-                    const displayUser = otherPerson ?? conversation.participants[0];
-                    if (!displayUser) return null;
+          <ul role="list" className="py-1">
+            {filtered.map((conversation) => {
+              const isActive  = activeConversation?.id === conversation.id;
+              const preview   = getLastMessagePreview(
+                conversation.lastMessage,
+                currentUser.id,
+              );
+              const timestamp = conversation.lastMessage?.timestamp
+                ? formatTimestamp(conversation.lastMessage.timestamp)
+                : "";
 
-                    return (
-                      <ProfileView
-                        user={{ ...displayUser, name: conversation.name, avatar: conversation.avatar }}
-                        showFullName={false}
-                        showName={false}    // ← hides name + status text
-                        showStatus={true}   // ← keeps the presence indicator dot
-                        showLastSeen={false}
-                        size="default"
-                        currentUser={currentUser}
-                        className="flex-shrink-0"
-                      />
-                    );
-                  })() : (
-                    <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-secondary">
-                        {conversation.avatar ? (
-                          <AppImage src={conversation.avatar} alt={conversation.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Icon name={conversation.type === "group" ? "Users" : "User"} size={20} className="text-muted-foreground" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+              return (
+                <li key={conversation.id} role="listitem">
+                  <button
+                    onClick={() =>
+                      onConversationSelect({ id: conversation.id })
+                    }
+                    className={[
+                      "w-full flex items-center space-x-3 px-4 py-3 text-left",
+                      "transition-colors duration-150",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                      isActive ? "bg-accent" : "hover:bg-accent/50",
+                    ].join(" ")}
+                    aria-current={isActive ? "true" : undefined}
+                  >
+                    <ConversationAvatar
+                      conversation={conversation}
+                      currentUserId={currentUser.id}
+                    />
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="text-sm font-medium text-foreground truncate">{conversation.name}</h3>
-                      <div className="flex items-center space-x-2 flex-shrink-0">
-                        {conversation.lastMessage && (
-                          <span className="text-xs text-muted-foreground">
-                            {formatTimestamp(conversation.lastMessage.timestamp)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span
+                          className={[
+                            "text-sm truncate",
+                            conversation.unreadCount > 0
+                              ? "font-semibold text-foreground"
+                              : "font-medium text-foreground",
+                          ].join(" ")}
+                        >
+                          {conversation.name}
+                        </span>
+                        {timestamp && (
+                          <span
+                            className={[
+                              "text-xs flex-shrink-0 ml-2",
+                              conversation.unreadCount > 0
+                                ? "text-primary font-medium"
+                                : "text-muted-foreground",
+                            ].join(" ")}
+                          >
+                            {timestamp}
                           </span>
                         )}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <p
+                          className={[
+                            "text-xs truncate",
+                            conversation.unreadCount > 0
+                              ? "text-foreground"
+                              : "text-muted-foreground",
+                          ].join(" ")}
+                        >
+                          {preview}
+                        </p>
                         {conversation.unreadCount > 0 && (
-                          <div className="bg-error text-error-foreground text-xs font-medium px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                            {conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}
-                          </div>
+                          <span
+                            className="ml-2 flex-shrink-0 min-w-[1.25rem] h-5 px-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center"
+                            aria-label={`${conversation.unreadCount} unread messages`}
+                          >
+                            {conversation.unreadCount > 99
+                              ? "99+"
+                              : conversation.unreadCount}
+                          </span>
                         )}
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">{getPreview(conversation)}</p>
-
-                    {conversation.type === "group" && (
-                      <div className="flex items-center justify-between mt-1">
-                        <div className="flex items-center">
-                          <Icon name="Users" size={12} className="text-muted-foreground mr-1" />
-                          <span className="text-xs text-muted-foreground">
-                            {conversation.participants.length} members
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </div>

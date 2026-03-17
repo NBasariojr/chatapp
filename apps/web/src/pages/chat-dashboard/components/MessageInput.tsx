@@ -2,6 +2,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import Icon from "components/AppIcon";
 import Button from "components/ui/Button";
+import { cn } from "lib/utils";
+import type { Theme } from "./ThemeModal"; // ← added
 
 interface MessageData {
   type: "text" | "image" | "file";
@@ -26,6 +28,7 @@ interface MessageInputProps {
   placeholder?: string;
   replyingTo?: ReplyContext | null;
   onCancelReply?: () => void;
+  theme?: Theme; // ← added
 }
 
 const EMOJIS = ["😀","😂","😍","🤔","👍","👎","❤️","🔥","💯","🎉","😢","😡","🤝","👏","🙏","💪"];
@@ -44,6 +47,7 @@ const MessageInput = ({
   placeholder = "Type a message...",
   replyingTo,
   onCancelReply,
+  theme, // ← added
 }: MessageInputProps) => {
   const [message, setMessage]                 = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -52,14 +56,10 @@ const MessageInput = ({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef   = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-focus input when reply context is set
   useEffect(() => {
-    if (replyingTo) {
-      textareaRef.current?.focus();
-    }
+    if (replyingTo) textareaRef.current?.focus();
   }, [replyingTo]);
 
-  // Escape clears the reply banner
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && replyingTo) onCancelReply?.();
@@ -92,7 +92,10 @@ const MessageInput = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "file") => {
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: "image" | "file",
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -108,9 +111,33 @@ const MessageInput = ({
     reader.readAsDataURL(file);
   };
 
-  return (
-    <div className="border-t border-border bg-card p-4">
+  // ── Theme-aware wrapper styles ───────────────────────────────────────────
+  // When a theme is active the messages area behind us is a gradient.
+  // Replace the solid bg-card with a frosted-glass overlay so the input
+  // feels like it belongs to the same visual space instead of floating
+  // on top as a disconnected white/dark bar.
+  //
+  // backdrop-blur only works when the element itself has a semi-transparent
+  // background — rgba(0,0,0,0.25) provides just enough tint without hiding
+  // the gradient completely.
+  const isThemed = Boolean(theme?.background);
+  // ────────────────────────────────────────────────────────────────────────
 
+  return (
+    <div
+      className={cn(
+        "border-t border-border p-4 transition-all duration-300",
+        // Default: solid card background (unchanged from original)
+        !isThemed && "bg-card",
+        // Themed: frosted glass — blends with the gradient behind
+        isThemed && "backdrop-blur-md border-white/10",
+      )}
+      style={
+        isThemed
+          ? { backgroundColor: "rgba(0, 0, 0, 0.25)" }
+          : undefined
+      }
+    >
       {/* Typing indicator */}
       {isTyping && (
         <div className="flex items-center space-x-2 mb-2 text-sm text-muted-foreground">
@@ -127,10 +154,7 @@ const MessageInput = ({
         </div>
       )}
 
-      {/* ── Reply Preview Banner ──────────────────────────────────────────────
-          Appears when the user clicks the reply button on a message.
-          Shows who they're replying to and a preview of the message.
-          Dismissed by: clicking X, pressing Escape, or sending the reply. */}
+      {/* Reply Preview Banner */}
       {replyingTo && (
         <div className="flex items-start justify-between mb-3 pl-3 pr-2 py-2 bg-accent/30 border-l-2 border-primary rounded-r-lg">
           <div className="flex-1 min-w-0">
@@ -161,7 +185,10 @@ const MessageInput = ({
             {EMOJIS.map((emoji, i) => (
               <button
                 key={i}
-                onClick={() => { setMessage((p) => p + emoji); setShowEmojiPicker(false); }}
+                onClick={() => {
+                  setMessage((p) => p + emoji);
+                  setShowEmojiPicker(false);
+                }}
                 className="p-2 hover:bg-accent/50 rounded-lg transition-colors duration-200 text-lg"
               >
                 {emoji}
@@ -176,14 +203,20 @@ const MessageInput = ({
         <div className="mb-4 p-2 bg-popover border border-border rounded-lg shadow-lg w-fit">
           <div className="space-y-1">
             <button
-              onClick={() => { imageInputRef.current?.click(); setAttachmentMenu(false); }}
+              onClick={() => {
+                imageInputRef.current?.click();
+                setAttachmentMenu(false);
+              }}
               className="flex items-center space-x-3 w-full p-2 hover:bg-accent/50 rounded-lg transition-colors duration-200"
             >
               <Icon name="Image" size={18} className="text-primary" />
               <span className="text-sm">Photo</span>
             </button>
             <button
-              onClick={() => { fileInputRef.current?.click(); setAttachmentMenu(false); }}
+              onClick={() => {
+                fileInputRef.current?.click();
+                setAttachmentMenu(false);
+              }}
               className="flex items-center space-x-3 w-full p-2 hover:bg-accent/50 rounded-lg transition-colors duration-200"
             >
               <Icon name="File" size={18} className="text-primary" />
@@ -238,8 +271,20 @@ const MessageInput = ({
         </Button>
       </form>
 
-      <input ref={fileInputRef}  type="file" accept="*/*"     onChange={(e) => handleFileChange(e, "file")}  className="hidden" />
-      <input ref={imageInputRef} type="file" accept="image/*" onChange={(e) => handleFileChange(e, "image")} className="hidden" />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="*/*"
+        onChange={(e) => handleFileChange(e, "file")}
+        className="hidden"
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => handleFileChange(e, "image")}
+        className="hidden"
+      />
     </div>
   );
 };

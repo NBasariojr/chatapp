@@ -1,5 +1,5 @@
 // web/src/pages/chat-dashboard/components/MessageThread.tsx
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useDispatch } from "react-redux";
 import Icon from "components/AppIcon";
 import AppImage from "../../../components/AppImage";
@@ -8,6 +8,8 @@ import ProfileView from "./ProfileView";
 import MessageInput from "./MessageInput";
 import { setActiveRoom } from "../../../redux/slices/chatSlice";
 import type { ReplyPreview } from "@chatapp/shared";
+import type { Theme } from "./ThemeModal";
+import type { SystemEvent } from "../index";
 
 interface Sender {
   id: string;
@@ -63,10 +65,42 @@ interface MessageThreadProps {
   onTyping?: (typing: boolean) => void;
   showDetails?: boolean;
   onToggleDetails?: () => void;
+  theme?: Theme;
+  systemEvents?: SystemEvent[];
 }
 
+// ─── Timeline item ────────────────────────────────────────────────────────────
+type TimelineItem =
+  | { kind: "message"; data: Message }
+  | { kind: "system";  data: SystemEvent };
+
+// ─── Themed overlay styles ────────────────────────────────────────────────────
+const THEMED_DATE_PILL_STYLE: React.CSSProperties = {
+  backgroundColor: "rgba(0, 0, 0, 0.35)",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
+};
+
+const THEMED_RECEIVED_BUBBLE_STYLE: React.CSSProperties = {
+  backgroundColor: "hsla(0, 0%, 100%, 0.82)",
+  color: "#1e1b2e",
+  borderColor: "transparent",
+};
+
+const THEMED_SYSTEM_PILL_STYLE: React.CSSProperties = {
+  backgroundColor: "rgba(0, 0, 0, 0.30)",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
+  borderColor: "rgba(255,255,255,0.10)",
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 const formatTime = (ts: Date | string) =>
-  new Date(ts).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  new Date(ts).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 
 const formatDate = (ts: Date | string) => {
   const d = new Date(ts);
@@ -75,10 +109,16 @@ const formatDate = (ts: Date | string) => {
   yesterday.setDate(today.getDate() - 1);
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
 };
 
-const getReplyPreviewText = (replyTo: ReplyPreview | string | null | undefined): string => {
+const getReplyPreviewText = (
+  replyTo: ReplyPreview | string | null | undefined,
+): string => {
   if (!replyTo || typeof replyTo === "string") return "Original message";
   if (replyTo.type === "image") return "📷 Photo";
   if (replyTo.type === "file")  return "📎 File";
@@ -96,21 +136,20 @@ const MessageThread = ({
   onTyping,
   showDetails,
   onToggleDetails,
+  theme,
+  systemEvents = [],
 }: MessageThreadProps) => {
-  const [editingId, setEditingId]       = useState<string | null>(null);
-  const [editContent, setEditContent]   = useState("");
-  const [replyingTo, setReplyingTo]     = useState<ReplyContext | null>(null);
-
-  // Tracks which message is awaiting delete confirmation in the hover toolbar
+  const [editingId, setEditingId]             = useState<string | null>(null);
+  const [editContent, setEditContent]         = useState("");
+  const [replyingTo, setReplyingTo]           = useState<ReplyContext | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile]               = useState(window.innerWidth < 768);
   const bottomRef = useRef<HTMLDivElement>(null);
   const dispatch  = useDispatch();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, systemEvents]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -118,11 +157,30 @@ const MessageThread = ({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Clear both reply context and pending confirmation when switching rooms
   useEffect(() => {
     setReplyingTo(null);
     setConfirmDeleteId(null);
   }, [conversation?.id]);
+
+  // ── Merged chronological timeline ─────────────────────────────────────────
+  const timeline = useMemo<Record<string, TimelineItem[]>>(() => {
+    const all: TimelineItem[] = [
+      ...messages.map((m): TimelineItem => ({ kind: "message", data: m })),
+      ...systemEvents.map((e): TimelineItem => ({ kind: "system", data: e })),
+    ];
+    all.sort(
+      (a, b) =>
+        new Date(a.data.timestamp).getTime() -
+        new Date(b.data.timestamp).getTime(),
+    );
+    return all.reduce<Record<string, TimelineItem[]>>((acc, item) => {
+      const key = new Date(item.data.timestamp).toDateString();
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item);
+      return acc;
+    }, {});
+  }, [messages, systemEvents]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const canEdit = (msg: Message) => {
     const mins = (Date.now() - new Date(msg.timestamp).getTime()) / 60000;
@@ -142,12 +200,10 @@ const MessageThread = ({
     setReplyingTo(null);
   };
 
-  const grouped = messages.reduce<Record<string, Message[]>>((acc, msg) => {
-    const key = new Date(msg.timestamp).toDateString();
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(msg);
-    return acc;
-  }, {});
+  const threadBg       = theme?.background     || undefined;
+  const sentBubbleBg   = theme?.sentMessageBg  || undefined;
+  const sentBubbleText = theme?.sentMessageText || undefined;
+  const isThemed       = Boolean(threadBg);
 
   if (!conversation) {
     return (
@@ -161,11 +217,12 @@ const MessageThread = ({
     );
   }
 
-  const headerUser = conversation.type === "direct"
-    ? (conversation.participants.find((p) => p.id !== currentUser.id)
-        ?? conversation.participants[0]
-        ?? { id: "", name: conversation.name, avatar: conversation.avatar })
-    : null;
+  const headerUser =
+    conversation.type === "direct"
+      ? (conversation.participants.find((p) => p.id !== currentUser.id) ??
+          conversation.participants[0] ??
+          { id: "", name: conversation.name, avatar: conversation.avatar })
+      : null;
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -214,39 +271,102 @@ const MessageThread = ({
       </div>
 
       {/* ── Messages ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-        {Object.entries(grouped).map(([dateKey, dayMessages]) => (
+      <div
+        className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 transition-all duration-300"
+        style={threadBg ? { background: threadBg } : undefined}
+      >
+        {Object.entries(timeline).map(([dateKey, dayItems]) => (
           <div key={dateKey}>
+
+            {/* Date separator */}
             <div className="flex items-center justify-center my-6">
-              <div className="bg-muted px-3 py-1 rounded-full">
-                <span className="text-xs text-muted-foreground font-medium">
-                  {formatDate(dayMessages[0].timestamp)}
+              <div
+                className="px-3 py-1 rounded-full bg-muted"
+                style={isThemed ? THEMED_DATE_PILL_STYLE : undefined}
+              >
+                <span
+                  className="text-xs font-medium text-muted-foreground"
+                  style={isThemed ? { color: "rgba(255,255,255,0.80)" } : undefined}
+                >
+                  {formatDate(dayItems[0].data.timestamp)}
                 </span>
               </div>
             </div>
 
-            {dayMessages.map((message, index) => {
-              const isMe = message.sender.id === currentUser.id;
-              const showAvatar = !isMe && (
-                index === 0 || dayMessages[index - 1].sender.id !== message.sender.id
-              );
+            {dayItems.map((item, index) => {
 
-              const populatedReply =
+              // ── System event pill ──────────────────────────────────────────
+              if (item.kind === "system") {
+                const e = item.data;
+
+                // ── Attribution logic ──────────────────────────────────────
+                // actorId tells us who made the change.
+                // If it matches currentUser.id → "You"
+                // Otherwise → the actor's display name
+                const actor =
+                  e.actorId === currentUser.id ? "You" : e.actorName;
+                const verb   = actor === "You" ? "changed" : "changed";
+                const pillText = `${actor} ${verb} the theme to "${e.content}"`;
+                // ──────────────────────────────────────────────────────────
+
+                return (
+                  <div
+                    key={e.id}
+                    className="flex items-center justify-center my-2"
+                    aria-label="System notification"
+                  >
+                    <div
+                      className="flex items-center space-x-1.5 bg-muted/60 border border-border/40 px-3 py-1 rounded-full max-w-sm"
+                      style={isThemed ? THEMED_SYSTEM_PILL_STYLE : undefined}
+                    >
+                      <Icon
+                        name="Palette"
+                        size={11}
+                        className="flex-shrink-0 text-muted-foreground"
+                        style={isThemed ? { color: "rgba(255,255,255,0.60)" } : undefined}
+                      />
+                      <span
+                        className="text-xs text-muted-foreground truncate"
+                        style={isThemed ? { color: "rgba(255,255,255,0.70)" } : undefined}
+                      >
+                        {pillText}
+                      </span>
+                      <span
+                        className="text-[10px] text-muted-foreground/60 flex-shrink-0"
+                        style={isThemed ? { color: "rgba(255,255,255,0.45)" } : undefined}
+                      >
+                        {formatTime(e.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── Regular message ────────────────────────────────────────────
+              const message = item.data;
+              const isMe    = message.sender.id === currentUser.id;
+
+              const prevMessageItem = dayItems
+                .slice(0, index)
+                .reverse()
+                .find((i) => i.kind === "message");
+              const prevSenderId =
+                prevMessageItem?.kind === "message"
+                  ? prevMessageItem.data.sender.id
+                  : null;
+
+              const showAvatar         = !isMe && prevSenderId !== message.sender.id;
+              const populatedReply     =
                 message.replyTo && typeof message.replyTo === "object"
                   ? (message.replyTo as ReplyPreview)
                   : null;
-
-              // Whether this message's toolbar is showing a delete confirmation
               const isConfirmingDelete = confirmDeleteId === message.id;
 
               return (
                 <div
                   key={message.id}
                   className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
-                  // Clicking outside the toolbar clears any pending confirmation
-                  onClick={() => {
-                    if (isConfirmingDelete) setConfirmDeleteId(null);
-                  }}
+                  onClick={() => { if (isConfirmingDelete) setConfirmDeleteId(null); }}
                 >
                   <div className={`flex max-w-[70%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
                     {showAvatar && !isMe && (
@@ -264,12 +384,20 @@ const MessageThread = ({
                     {!showAvatar && !isMe && <div className="w-8 mr-2" />}
 
                     <div className={`relative ${isMe ? "mr-2" : ""}`}>
-                      <div className={`px-4 py-2 rounded-2xl ${
-                        isMe
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card border border-border text-card-foreground"
-                      }`}>
-
+                      <div
+                        className={`px-4 py-2 rounded-2xl ${
+                          isMe
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-card border border-border text-card-foreground"
+                        }`}
+                        style={
+                          isMe && sentBubbleBg
+                            ? { backgroundColor: sentBubbleBg, color: sentBubbleText }
+                            : !isMe && isThemed
+                            ? THEMED_RECEIVED_BUBBLE_STYLE
+                            : undefined
+                        }
+                      >
                         {/* Quoted reply bubble */}
                         {populatedReply && (
                           <div className={`mb-2 px-3 py-1.5 rounded-lg border-l-2 border-primary/60 ${
@@ -336,21 +464,13 @@ const MessageThread = ({
                         )}
                       </div>
 
-                      {/* ── Hover Toolbar ─────────────────────────────────── */}
+                      {/* ── Hover Toolbar ── */}
                       {editingId !== message.id && (
                         <div className={`absolute top-0 ${isMe ? "left-0 -translate-x-full pr-1" : "right-0 translate-x-full pl-1"} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
                           <div className="flex items-center space-x-1 bg-popover border border-border rounded-lg p-1 shadow-lg">
-
-                            {/* ── DELETE CONFIRMATION STATE ────────────────
-                                First click on trash → shows "Delete?" + Yes/No
-                                Clicking Yes → actually deletes
-                                Clicking No (or anywhere outside) → back to normal
-                                This prevents accidental deletions. */}
                             {isConfirmingDelete ? (
                               <>
-                                <span className="text-xs text-foreground px-1 whitespace-nowrap">
-                                  Delete?
-                                </span>
+                                <span className="text-xs text-foreground px-1 whitespace-nowrap">Delete?</span>
                                 <Button
                                   size="xs"
                                   variant="ghost"
@@ -360,25 +480,15 @@ const MessageThread = ({
                                     onDeleteMessage(message.id);
                                     setConfirmDeleteId(null);
                                   }}
-                                >
-                                  Yes
-                                </Button>
+                                >Yes</Button>
                                 <Button
                                   size="xs"
                                   variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setConfirmDeleteId(null);
-                                  }}
-                                >
-                                  No
-                                </Button>
+                                  onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                                >No</Button>
                               </>
                             ) : (
                               <>
-                                {/* ── NORMAL TOOLBAR STATE ── */}
-
-                                {/* Reply button — sets reply context, shows banner in input */}
                                 <Button
                                   size="xs"
                                   variant="ghost"
@@ -386,7 +496,7 @@ const MessageThread = ({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setReplyingTo({
-                                      messageId: message.id,
+                                      messageId:  message.id,
                                       content:    message.content,
                                       type:       message.type,
                                       senderName: isMe ? "yourself" : message.sender.name,
@@ -395,7 +505,6 @@ const MessageThread = ({
                                 >
                                   <Icon name="MessageCircle" size={14} />
                                 </Button>
-
                                 {canEdit(message) && (
                                   <Button
                                     size="xs"
@@ -410,7 +519,6 @@ const MessageThread = ({
                                     <Icon name="Edit2" size={14} />
                                   </Button>
                                 )}
-
                                 {canDelete(message) && (
                                   <Button
                                     size="xs"
@@ -419,7 +527,6 @@ const MessageThread = ({
                                     className="hover:text-destructive hover:bg-destructive/10"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      // First click → show confirmation, don't delete yet
                                       setConfirmDeleteId(message.id);
                                     }}
                                   >
@@ -459,6 +566,7 @@ const MessageThread = ({
           onTyping={onTyping}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
+          theme={theme}
         />
       </div>
     </div>

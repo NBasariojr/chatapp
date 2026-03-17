@@ -19,6 +19,61 @@ import Header from "components/ui/Header";
 import ConversationList from "./components/ConversationList";
 import MessageThread from "./components/MessageThread";
 import ConversationDetails from "./components/ConversationDetails";
+import type { Theme } from "./components/ThemeModal";
+
+// ─── localStorage helpers ─────────────────────────────────────────────────────
+
+const THEMES_STORAGE_KEY        = "linkup:roomThemes";
+const SYSTEM_EVENTS_STORAGE_KEY = "linkup:roomSystemEvents";
+
+const loadRoomThemes = (): Record<string, Theme> => {
+  try {
+    const raw = localStorage.getItem(THEMES_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, Theme>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveRoomThemes = (themes: Record<string, Theme>): void => {
+  try {
+    localStorage.setItem(THEMES_STORAGE_KEY, JSON.stringify(themes));
+  } catch {}
+};
+
+const MAX_EVENTS_PER_ROOM = 50;
+
+const loadRoomSystemEvents = (): Record<string, SystemEvent[]> => {
+  try {
+    const raw = localStorage.getItem(SYSTEM_EVENTS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, SystemEvent[]>;
+    Object.values(parsed).forEach((events) => {
+      events.forEach((e) => { e.timestamp = new Date(e.timestamp); });
+    });
+    return parsed;
+  } catch {
+    return {};
+  }
+};
+
+const saveRoomSystemEvents = (events: Record<string, SystemEvent[]>): void => {
+  try {
+    localStorage.setItem(SYSTEM_EVENTS_STORAGE_KEY, JSON.stringify(events));
+  } catch {}
+};
+
+// ─── System event type ────────────────────────────────────────────────────────
+export interface SystemEvent {
+  id: string;
+  roomId: string;
+  type: "system";
+  content: string;       // theme name only — e.g. "Sky Garden"
+  timestamp: Date;
+  actorId: string;       // ← added: ID of the user who made the change
+  actorName: string;     // ← added: display name of that user
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const ChatDashboard = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -28,14 +83,49 @@ const ChatDashboard = () => {
   );
 
   const [showDetails, setShowDetails] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile]       = useState(window.innerWidth < 768);
+
+  // ── Per-room theme map ───────────────────────────────────────────────────
+  const [roomThemes, setRoomThemes] = useState<Record<string, Theme>>(
+    loadRoomThemes,
+  );
+  useEffect(() => { saveRoomThemes(roomThemes); }, [roomThemes]);
+
+  // ── Per-room system events ───────────────────────────────────────────────
+  const [roomSystemEvents, setRoomSystemEvents] = useState<
+    Record<string, SystemEvent[]>
+  >(loadRoomSystemEvents);
+  useEffect(() => { saveRoomSystemEvents(roomSystemEvents); }, [roomSystemEvents]);
+
+  const handleThemeChange = (theme: Theme) => {
+    if (!activeRoomId || !user) return;
+
+    setRoomThemes((prev) => ({ ...prev, [activeRoomId]: theme }));
+
+    const event: SystemEvent = {
+      id:        `sys-${Date.now()}`,
+      roomId:    activeRoomId,
+      type:      "system",
+      content:   theme.name,    // ← store only the theme name, not the full sentence
+      timestamp: new Date(),
+      actorId:   user._id,      // ← who made the change
+      actorName: user.username, // ← their display name
+    };
+
+    setRoomSystemEvents((prev) => {
+      const existing = prev[activeRoomId] ?? [];
+      const updated  = [...existing, event].slice(-MAX_EVENTS_PER_ROOM);
+      return { ...prev, [activeRoomId]: updated };
+    });
+  };
+
+  const activeTheme        = activeRoomId ? roomThemes[activeRoomId]        : undefined;
+  const activeSystemEvents = activeRoomId ? (roomSystemEvents[activeRoomId] ?? []) : [];
 
   const activeConversation = rooms?.find((r) => r._id === activeRoomId) ?? null;
   const activeMessages     = activeRoomId ? (messages[activeRoomId] ?? []) : [];
 
-  useEffect(() => {
-    dispatch(fetchRooms());
-  }, []);
+  useEffect(() => { dispatch(fetchRooms()); }, []);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -66,29 +156,17 @@ const ChatDashboard = () => {
     );
   };
 
-  // ← FIXED: was /* TODO */ — now calls the API and lets the socket
-  // event (message:updated) update the Redux store for all clients
   const handleEditMessage = async (messageId: string, content: string) => {
     try {
       await chatService.editMessage(messageId, content);
-      // Note: no manual Redux dispatch needed here.
-      // The backend emits message:updated via socket, which the
-      // socket.service.ts listener catches and dispatches updateMessage().
-      // This keeps the update flow identical for the sender and all
-      // other users in the room.
     } catch (err) {
       console.error("[handleEditMessage] Failed:", err);
     }
   };
 
-  // ← FIXED: was /* TODO */ — now calls the API and lets the socket
-  // event (message:deleted) update the Redux store for all clients
   const handleDeleteMessage = async (messageId: string) => {
     try {
       await chatService.deleteMessage(messageId);
-      // Same pattern as edit — no manual Redux dispatch.
-      // The backend emits message:deleted via socket, which the
-      // socket.service.ts listener catches and dispatches removeMessage().
     } catch (err) {
       console.error("[handleDeleteMessage] Failed:", err);
     }
@@ -96,17 +174,17 @@ const ChatDashboard = () => {
 
   const currentUser = user
     ? {
-        id: user._id,
-        name: user.username,
+        id:     user._id,
+        name:   user.username,
         avatar: user.avatar,
         status: "online" as const,
-        role: user.role,
+        role:   user.role,
       }
     : { id: "", name: "", status: "online" as const };
 
   const conversations =
     rooms?.map((room) => ({
-      id: room._id,
+      id:   room._id,
       type: room.isGroup ? ("group" as const) : ("direct" as const),
       name:
         room.name ||
@@ -126,21 +204,21 @@ const ChatDashboard = () => {
           isOnline?: boolean;
           role?: string;
         }) => ({
-          id: p._id,
-          name: p.username,
+          id:     p._id,
+          name:   p.username,
           avatar: p.avatar,
           status: p.isOnline ? ("online" as const) : ("offline" as const),
-          role: p.role,
+          role:   p.role,
         }),
       ),
       lastMessage: room.lastMessage
         ? {
-            id: room.lastMessage._id,
-            content: room.lastMessage.content,
-            type: room.lastMessage.type,
+            id:        room.lastMessage._id,
+            content:   room.lastMessage.content,
+            type:      room.lastMessage.type,
             timestamp: room.lastMessage.createdAt,
             sender: {
-              id: room.lastMessage.sender?._id ?? room.lastMessage.sender,
+              id:   room.lastMessage.sender?._id ?? room.lastMessage.sender,
               name: room.lastMessage.sender?.username ?? "Unknown",
             },
           }
@@ -158,18 +236,18 @@ const ChatDashboard = () => {
       status?: string;
       replyTo?: ReplyPreview | string | null;
     }) => ({
-      id: m._id,
+      id:      m._id,
       content: m.content,
-      type: m.type as "text" | "image" | "file",
+      type:    m.type as "text" | "image" | "file",
       sender: {
-        id: m.sender._id,
-        name: m.sender.username,
+        id:     m.sender._id,
+        name:   m.sender.username,
         avatar: m.sender.avatar,
-        role: m.sender.role,
+        role:   m.sender.role,
       },
       timestamp: new Date(m.createdAt),
-      status: (m.status ?? "sent") as "sent" | "delivered" | "read",
-      replyTo: m.replyTo,
+      status:    (m.status ?? "sent") as "sent" | "delivered" | "read",
+      replyTo:   m.replyTo,
     }),
   );
 
@@ -222,6 +300,8 @@ const ChatDashboard = () => {
             }}
             showDetails={showDetails}
             onToggleDetails={() => setShowDetails(!showDetails)}
+            theme={activeTheme}
+            systemEvents={activeSystemEvents}
           />
         </div>
 
@@ -235,6 +315,8 @@ const ChatDashboard = () => {
                 onBack={() => setShowDetails(false)}
                 currentUser={currentUser}
                 className="w-full"
+                onThemeChange={handleThemeChange}
+                activeThemeId={activeTheme?.id}
               />
             </div>
           ) : (
@@ -242,6 +324,8 @@ const ChatDashboard = () => {
               conversation={mappedActive}
               onClose={() => setShowDetails(false)}
               currentUser={currentUser}
+              onThemeChange={handleThemeChange}
+              activeThemeId={activeTheme?.id}
             />
           ))}
       </div>
