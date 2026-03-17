@@ -22,35 +22,6 @@ const LoginFooter = ({ onNavigateToRegister }: LoginFooterProps) => {
           </button>
         </p>
       </div>
-
-      {/* Footer Links */}
-      <div className="text-center space-y-2">
-        <div className="flex items-center justify-center space-x-4 text-xs text-muted-foreground">
-          <button
-            type="button"
-            className="hover:text-foreground transition-colors duration-200 focus:outline-none focus:underline"
-          >
-            Privacy Policy
-          </button>
-          <span>•</span>
-          <button
-            type="button"
-            className="hover:text-foreground transition-colors duration-200 focus:outline-none focus:underline"
-          >
-            Terms of Service
-          </button>
-          <span>•</span>
-          <button
-            type="button"
-            className="hover:text-foreground transition-colors duration-200 focus:outline-none focus:underline"
-          >
-            Support
-          </button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          © {currentYear} LinkUp. All rights reserved.
-        </p>
-      </div>
     </div>
   );
 };
