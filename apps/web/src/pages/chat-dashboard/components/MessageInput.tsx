@@ -109,6 +109,7 @@ const MessageInput = ({
       });
     };
     reader.readAsDataURL(file);
+    e.currentTarget.value = '';
   };
 
   // ── Theme-aware wrapper styles ───────────────────────────────────────────
@@ -188,6 +189,7 @@ const MessageInput = ({
                 onClick={() => {
                   setMessage((p) => p + emoji);
                   setShowEmojiPicker(false);
+                  onTyping?.(true);
                 }}
                 className="p-2 hover:bg-accent/50 rounded-lg transition-colors duration-200 text-lg"
               >

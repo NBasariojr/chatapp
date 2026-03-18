@@ -128,26 +128,38 @@ const startServer = async (): Promise<void> => {
   }
 };
 
-// Graceful shutdown with proper order and force timeout
-process.on("SIGTERM", () => {
-  console.log("SIGTERM received. Shutting down gracefully...");
-
+const gracefulShutdown = async () => {
   const forceExit = setTimeout(() => {
     console.error("Forceful shutdown after 10s timeout.");
     process.exit(1);
   }, 10000);
   forceExit.unref();
 
-  httpServer.close(async () => {
-    await io.close();
-    await closeRedisConnections();
-    console.log("Server closed.");
-    process.exit(0);
-  });
-});
+  const shutdown = async () => {
+    return new Promise<void>((resolve) => {
+      httpServer.close(async () => {
+        try {
+          await io.close();
+          await closeRedisConnections();
+          console.log("Server closed.");
+          resolve();
+        } catch (error) {
+          console.error("Error during shutdown:", error);
+          resolve();
+        }
+      });
+    });
+  };
+
+  await shutdown();
+  process.exit(0);
+};
+
+// Graceful shutdown with proper order and force timeout
+process.on("SIGTERM", gracefulShutdown);
 
 // Handle SIGINT (Ctrl+C) same as SIGTERM
-process.on("SIGINT", () => process.emit("SIGTERM"));
+process.on("SIGINT", gracefulShutdown);
 
 startServer();
 export { io };

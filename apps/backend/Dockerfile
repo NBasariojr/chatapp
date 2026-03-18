@@ -46,13 +46,13 @@ RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 
 # Copy healthcheck script
-COPY --chown=nodejs:nodejs healthcheck.js ./healthcheck.js
+COPY --chown=nodejs:nodejs healthcheck.mjs ./healthcheck.mjs
 
 USER nodejs
 EXPOSE 4000
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node healthcheck.js
+  CMD node healthcheck.mjs
 
 CMD ["node", "dist/server.js"]

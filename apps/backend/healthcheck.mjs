@@ -21,4 +21,8 @@ request.on('error', (err) => {
   process.exit(1);
 });
 
-request.end();
+request.on('timeout', () => {
+  console.error('Healthcheck timed out');
+  request.abort();
+  process.exit(1);
+});

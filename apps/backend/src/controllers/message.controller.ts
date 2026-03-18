@@ -107,11 +107,11 @@ export const sendMessage = async (
       populate: { path: "sender", select: "username" },
     });
 
-    await Room.findByIdAndUpdate(roomId, { lastMessage: message._id });
-    await cacheDel(`messages:${roomId}:page1`);
+    await Room.findByIdAndUpdate(roomId, { lastMessage: message._id.toString() });
+    await cacheDel(`messages:${roomId.toString()}:page1`);
 
 
-    getIO().to(roomId).emit('message:received', message);
+    getIO().to(roomId.toString()).emit('message:received', message);
 
     res.status(201).json({ success: true, data: message });
   } catch (error) {
@@ -193,9 +193,21 @@ export const deleteMessage = async (
     }
 
     // Sender can delete within 24h; admin can delete any message at any time
-    if (!message.sender.equals(req.user?._id) && req.user?.role !== "admin") {
+    const isSender = message.sender.equals(req.user?._id);
+    const isAdmin = req.user?.role === "admin";
+    
+    if (!isSender && !isAdmin) {
       res.status(403).json({ success: false, message: "Not authorized to delete this message" });
       return;
+    }
+
+    // Enforce 24-hour window for non-admin senders
+    if (isSender && !isAdmin) {
+      const ageInHours = (Date.now() - message.createdAt.getTime()) / (1000 * 60 * 60);
+      if (ageInHours > 24) {
+        res.status(403).json({ success: false, message: "Not authorized to delete this message" });
+        return;
+      }
     }
 
     const roomId = message.roomId.toString();

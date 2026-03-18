@@ -14,7 +14,6 @@ import {
   stopTyping,
 } from "services/socket.service";
 import { chatService } from "services/chat.service";
-import Icon from "components/AppIcon";
 import Header from "components/ui/Header";
 import ConversationList from "./components/ConversationList";
 import MessageThread from "./components/MessageThread";
@@ -125,7 +124,7 @@ const ChatDashboard = () => {
   const activeConversation = rooms?.find((r) => r._id === activeRoomId) ?? null;
   const activeMessages     = activeRoomId ? (messages[activeRoomId] ?? []) : [];
 
-  useEffect(() => { dispatch(fetchRooms()); }, []);
+  useEffect(() => { dispatch(fetchRooms()); }, [dispatch]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);

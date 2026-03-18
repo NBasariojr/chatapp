@@ -38,10 +38,6 @@ RUN pnpm build
 # Stage 2: Production with nginx
 FROM nginx:alpine AS production
 
-# Create non-root user
-RUN addgroup -g 1001 -S nginx && \
-    adduser -S nginx -u 1001
-
 # Copy built assets from builder
 COPY --from=builder --chown=nginx:nginx /app/dist /usr/share/nginx/html
 
@@ -57,10 +53,10 @@ RUN mkdir -p /var/cache/nginx && \
     chown -R nginx:nginx /var/run/nginx.pid
 
 USER nginx
-EXPOSE 80
+EXPOSE 8080
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

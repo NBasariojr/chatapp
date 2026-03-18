@@ -118,12 +118,26 @@ const formatDate = (ts: Date | string) => {
 
 const getReplyPreviewText = (
   replyTo: ReplyPreview | string | null | undefined,
+  messages: Message[],
 ): string => {
-  if (!replyTo || typeof replyTo === "string") return "Original message";
+  if (!replyTo) return "Original message";
+  
+  if (typeof replyTo === "string") {
+    const repliedMessage = messages.find(msg => msg.id === replyTo);
+    if (!repliedMessage) return "Original message";
+    
+    if (repliedMessage.type === "image") return "📷 Photo";
+    if (repliedMessage.type === "file") return "📎 File";
+    return repliedMessage.content.length > 50 
+      ? repliedMessage.content.slice(0, 50) + "..." 
+      : repliedMessage.content;
+  }
+  
   if (replyTo.type === "image") return "📷 Photo";
-  if (replyTo.type === "file")  return "📎 File";
-  const text = replyTo.content ?? "";
-  return text.length > 60 ? text.slice(0, 60) + "..." : text;
+  if (replyTo.type === "file") return "📎 File";
+  return replyTo.content.length > 50 
+    ? replyTo.content.slice(0, 50) + "..." 
+    : replyTo.content;
 };
 
 const MessageThread = ({
@@ -184,7 +198,7 @@ const MessageThread = ({
 
   const canEdit = (msg: Message) => {
     const mins = (Date.now() - new Date(msg.timestamp).getTime()) / 60000;
-    return msg.sender.id === currentUser.id && mins <= 15;
+    return msg.sender.id === currentUser.id && mins <= 15 && msg.type === 'text';
   };
 
   const canDelete = (msg: Message) => {
@@ -366,6 +380,7 @@ const MessageThread = ({
                 <div
                   key={message.id}
                   className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
+                  tabIndex={0}
                   onClick={() => { if (isConfirmingDelete) setConfirmDeleteId(null); }}
                 >
                   <div className={`flex max-w-[70%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
@@ -416,7 +431,7 @@ const MessageThread = ({
                             <p className={`text-xs truncate ${
                               isMe ? "text-primary-foreground/70" : "text-muted-foreground"
                             }`}>
-                              {getReplyPreviewText(populatedReply)}
+                              {getReplyPreviewText(populatedReply, messages)}
                             </p>
                           </div>
                         )}
@@ -466,7 +481,7 @@ const MessageThread = ({
 
                       {/* ── Hover Toolbar ── */}
                       {editingId !== message.id && (
-                        <div className={`absolute top-0 ${isMe ? "left-0 -translate-x-full pr-1" : "right-0 translate-x-full pl-1"} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                        <div className={`absolute top-0 ${isMe ? "left-0 -translate-x-full pr-1" : "right-0 translate-x-full pl-1"} opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200`}>
                           <div className="flex items-center space-x-1 bg-popover border border-border rounded-lg p-1 shadow-lg">
                             {isConfirmingDelete ? (
                               <>
