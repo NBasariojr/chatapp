@@ -11,6 +11,8 @@ coverage
 .env.local
 .env.development
 .env.production
+.env.docker.development
+.env.docker.production
 
 # logs
 logs
@@ -22,20 +24,16 @@ Thumbs.db
 
 # pnpm
 .pnpm-store
-
-# turbo / cache
-.turbo
+.pnpm
 .cache
+.turbo
 
 # vscode
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 
-# documentation
-Codebase_Engineering_Constraints_and_AI_Builder_Operating_Rules.md
-
-# AI memory — session files are ephemeral
+# AI memory
 .ai/
 
 #Project Specific Rules

@@ -9,7 +9,7 @@ const envFile =
 
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
-import { initSentry } from "./config/sentry";
+import { initSentry, captureException } from "./config/sentry";
 initSentry();
 
 import http from "node:http";
@@ -97,6 +97,11 @@ const startServer = async (): Promise<void> => {
 
         console.log('✅ Socket.IO Redis adapter attached — multi-instance mode ACTIVE');
       } catch (adapterErr) {
+        // Capture error in Sentry for monitoring
+        captureException(adapterErr, {
+          tags: { component: 'redis-adapter' }
+        });
+
         console.warn(
           '⚠️ Redis adapter failed — falling back to in-memory. ' +
           'Multi-instance sync DISABLED.',
@@ -104,7 +109,7 @@ const startServer = async (): Promise<void> => {
         );
       }
     } else {
-      console.log('ℹ️ Redis adapter disabled (development) — single instance mode');
+      console.log('ℹ️  Redis adapter disabled (development) — single instance mode');
     }
 
     initSocketHandlers(io);

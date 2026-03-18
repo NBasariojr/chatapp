@@ -1,5 +1,9 @@
-# backend/Dockerfile
+# Stage 1: Base
 FROM node:20-alpine AS base
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
 WORKDIR /app
 
@@ -12,22 +16,43 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-# Development
+# Stage 2: Development
 FROM base AS development
+USER nodejs
+EXPOSE 4000
 CMD ["pnpm", "dev"]
 
-# Production build
+# Stage 3: Builder
 FROM base AS builder
 RUN pnpm build
 
+# Stage 4: Production
 FROM node:20-alpine AS production
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
 WORKDIR /app
+
+# Install pnpm
 RUN npm install -g pnpm
 
+# Copy production dependencies
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile --prod
 
-COPY --from=builder /app/dist ./dist
+# Copy built application
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 
+# Copy healthcheck script
+COPY --chown=nodejs:nodejs healthcheck.js ./healthcheck.js
+
+USER nodejs
 EXPOSE 4000
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node healthcheck.js
+
 CMD ["node", "dist/server.js"]
