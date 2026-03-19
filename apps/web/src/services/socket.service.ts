@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../redux/store';
-import { addMessage, setTyping, updateUserStatus } from '../redux/slices/chatSlice';
+import { addMessage, removeMessage, updateMessage, setTyping, updateUserStatus } from '../redux/slices/chatSlice';
 import type { Message } from '@chatapp/shared';
 
 // ─── Socket URL resolution ────────────────────────────────────────────────────
@@ -20,10 +20,11 @@ import type { Message } from '@chatapp/shared';
 const SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
 let socket: Socket | null = null;
+let socketToken: string | null = null;
 
 export const connectSocket = (token: string): Socket => {
-  if (socket?.connected) {
-    console.log('⚡ Socket already connected, reusing existing connection');
+  if (socket?.active && socketToken === token) {
+    console.log('⚡ Socket already active with same token, reusing existing connection');
     return socket;
   }
 
@@ -31,8 +32,10 @@ export const connectSocket = (token: string): Socket => {
     socket.removeAllListeners();
     socket.disconnect();
     socket = null;
+    socketToken = null;
   }
 
+  socketToken = token;
   socket = io(SOCKET_URL, {
     auth: { token },
     reconnection: true,
@@ -51,6 +54,32 @@ export const connectSocket = (token: string): Socket => {
 
   socket.on('message:received', (message: Message) => {
     store.dispatch(addMessage({ roomId: message.roomId, message }));
+  });
+
+  // ← ADDED: server emits this when someone edits a message
+  // Updates the content in the Redux store so all clients see the change
+  socket.on('message:updated', (payload: {
+    messageId: string;
+    roomId: string;
+    content: string;
+  }) => {
+    store.dispatch(updateMessage({
+      roomId:    payload.roomId,
+      messageId: payload.messageId,
+      content:   payload.content,
+    }));
+  });
+
+  // ← ADDED: server emits this when someone deletes a message
+  // Removes it from the Redux store so all clients stop showing it
+  socket.on('message:deleted', (payload: {
+    messageId: string;
+    roomId: string;
+  }) => {
+    store.dispatch(removeMessage({
+      roomId:    payload.roomId,
+      messageId: payload.messageId,
+    }));
   });
 
   socket.on('user:typing', ({ roomId, userId }: { roomId: string; userId: string }) => {
@@ -77,8 +106,12 @@ export const connectSocket = (token: string): Socket => {
 };
 
 export const disconnectSocket = (): void => {
-  socket?.disconnect();
-  socket = null;
+  if (socket) {
+    socket.removeAllListeners();
+    socket.disconnect();
+    socket = null;
+    socketToken = null;
+  }
 };
 
 export const getSocket = (): Socket | null => socket;

@@ -64,9 +64,27 @@ export const chatService = {
     return res.data.data;
   },
 
-  sendMessage: async (roomId: string, content: string, type = 'text'): Promise<Message> => {
-    const res = await client.post(`/api/messages/${roomId}`, { content, type });
+  sendMessage: async (
+    roomId: string,
+    content: string,
+    type = 'text',
+    replyTo?: string,
+  ): Promise<Message> => {
+    const res = await client.post(`/api/messages/${roomId}`, {
+      content,
+      type,
+      ...(replyTo && { replyTo }),
+    });
     return res.data.data;
+  },
+
+  editMessage: async (messageId: string, content: string): Promise<Message> => {
+    const res = await client.patch(`/api/messages/${messageId}`, { content });
+    return res.data.data;
+  },
+
+  deleteMessage: async (messageId: string): Promise<void> => {
+    await client.delete(`/api/messages/${messageId}`);
   },
 
   uploadMedia: async (file: File): Promise<{ url: string }> => {

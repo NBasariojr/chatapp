@@ -13,6 +13,10 @@ const sendMessageSchema = z.object({
   replyTo: z.string().optional(),
 });
 
+const editMessageSchema = z.object({
+  content: z.string().min(1).max(5000),
+});
+
 export const getMessages = async (
   req: AuthRequest,
   res: Response,
@@ -97,18 +101,82 @@ export const sendMessage = async (
     });
 
     await message.populate("sender", "username avatar isOnline");
+    await message.populate({
+      path: "replyTo",
+      select: "content type sender",
+      populate: { path: "sender", select: "username" },
+    });
 
-    await Room.findByIdAndUpdate(roomId, { lastMessage: message._id });
-    await cacheDel(`messages:${roomId}:page1`);
+    await Room.findByIdAndUpdate(roomId, { lastMessage: String(message._id) });
+    await cacheDel(`messages:${roomId.toString()}:page1`);
 
 
-    getIO().to(roomId).emit('message:received', message);
+    getIO().to(roomId.toString()).emit('message:received', message);
 
     res.status(201).json({ success: true, data: message });
   } catch (error) {
     next(error);
   }
 };
+
+// ─── EDIT MESSAGE ─────────────────────────────────────────────────────────────
+// Only the original sender can edit, and only within 15 minutes of sending.
+// Emits message:updated to the room so all clients update their UI in real-time.
+
+export const editMessage = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { messageId } = req.params;
+
+    const parsed = editMessageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, message: parsed.error.errors[0].message });
+      return;
+    }
+
+    const message = await Message.findById(messageId).populate("sender", "username avatar isOnline");
+    if (!message) {
+      res.status(404).json({ success: false, message: "Message not found" });
+      return;
+    }
+
+    // Only the sender can edit — admins cannot edit others' messages
+    if (!message.sender._id.equals(req.user?._id)) {
+      res.status(403).json({ success: false, message: "Not authorized to edit this message" });
+      return;
+    }
+
+    // Enforce the 15-minute edit window — matches the frontend canEdit() guard
+    const ageInMinutes = (Date.now() - message.createdAt.getTime()) / 60000;
+    if (ageInMinutes > 15) {
+      res.status(403).json({ success: false, message: "Message can no longer be edited" });
+      return;
+    }
+
+    message.content = parsed.data.content;
+    await message.save();
+
+    await cacheDel(`messages:${String(message.roomId)}:page1`);
+
+    // Emit the updated content to all clients in the room
+    getIO().to(String(message.roomId)).emit('message:updated', {
+      messageId: String(message._id),
+      roomId:    String(message.roomId), // Explicitly convert ObjectId to string
+      content:   message.content,
+    });
+
+    res.json({ success: true, data: message });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── DELETE MESSAGE ───────────────────────────────────────────────────────────
+// FIX: now emits message:deleted so all clients remove it from their UI.
+// Previously deleted from DB but never notified other clients in the room.
 
 export const deleteMessage = async (
   req: AuthRequest,
@@ -124,22 +192,63 @@ export const deleteMessage = async (
       return;
     }
 
-    // Only sender or admin can delete
-    if (
-      !message.sender.equals(req.user?._id) &&
-      req.user?.role !== "admin"
-    ) {
-      res
-        .status(403)
-        .json({
-          success: false,
-          message: "Not authorized to delete this message",
-        });
+    // Sender can delete within 24h; admin can delete any message at any time
+    const isSender = message.sender.toString() === req.user?._id.toString();
+    const isAdmin = req.user?.role === "admin";
+    
+    if (!isSender && !isAdmin) {
+      res.status(403).json({ success: false, message: "Not authorized to delete this message" });
+      return;
+    }
+
+    // Enforce 24-hour window for non-admin senders
+    if (isSender && !isAdmin) {
+      const ageInHours = (Date.now() - message.createdAt.getTime()) / (1000 * 60 * 60);
+      if (ageInHours > 24) {
+        res.status(403).json({ success: false, message: "Not authorized to delete this message" });
+        return;
+      }
+    }
+
+    const roomId = message.roomId?.toString();
+    if (!roomId) {
+      res.status(500).json({ success: false, message: "Invalid room ID" });
       return;
     }
 
     await message.deleteOne();
-    await cacheDel(`messages:${String(message.roomId)}:page1`);
+    await cacheDel(`messages:${roomId}:page1`);
+
+    // Update room's lastMessage if the deleted message was the last one
+    const room = await Room.findById(roomId);
+    if (room?.lastMessage?.toString() === messageId) {
+      const newestMessage = await Message.findOne({ roomId })
+        .sort({ createdAt: -1 })
+        .limit(1);
+      
+      if (newestMessage) {
+        room.lastMessage = newestMessage._id;
+      } else {
+        room.lastMessage = undefined;
+      }
+      await room.save();
+      
+      // Invalidate room cache and emit updated room
+      await cacheDel(`room:${roomId}`);
+      await cacheDel(`room:${roomId}:preview`);
+      getIO().to(roomId).emit('room:updated', { 
+        roomId, 
+        lastMessage: newestMessage ? {
+          _id: String(newestMessage._id),
+          content: newestMessage.content,
+          createdAt: newestMessage.createdAt,
+          sender: String(newestMessage.sender)
+        } : null 
+      });
+    }
+
+    // Emit deletion to the room — all clients remove the message from their list
+    getIO().to(roomId).emit('message:deleted', { messageId, roomId });
 
     res.json({ success: true, message: "Message deleted" });
   } catch (error) {

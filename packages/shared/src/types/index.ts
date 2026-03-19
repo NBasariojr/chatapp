@@ -60,9 +60,21 @@ export interface Message {
   sender: User;
   roomId: string;
   mediaUrl?: string;
-  replyTo?: string;
+  replyTo?: ReplyPreview | string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Reply shape ──────────────────────────────────────────────────────────────
+
+export interface ReplyPreview {
+  _id: string;
+  content: string;
+  type: MessageType;
+  sender: {
+    _id: string;
+    username: string;
+  };
 }
 
 export interface RoomSettings {
@@ -139,9 +151,28 @@ export interface PaginatedResponse<T> {
 // ─── Socket event types ───────────────────────────────────────────────────────
 
 export interface SocketEvents {
-  'message:send': (payload: { roomId: string; content: string; type: MessageType }) => void;
+  'message:send': (payload: {
+    roomId: string;
+    content: string;
+    type: MessageType;
+    replyTo?: string;
+  }) => void;
   'message:received': (message: Message) => void;
   'message:read': (payload: { messageId: string; roomId: string }) => void;
+
+  // ← ADDED: emitted by server when a message is edited
+  'message:updated': (payload: {
+    messageId: string;
+    roomId: string;
+    content: string;
+  }) => void;
+
+  // ← ADDED: emitted by server when a message is deleted
+  'message:deleted': (payload: {
+    messageId: string;
+    roomId: string;
+  }) => void;
+
   'user:typing': (payload: { roomId: string; userId: string }) => void;
   'user:stop-typing': (payload: { roomId: string; userId: string }) => void;
   'user:online': (userId: string) => void;

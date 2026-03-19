@@ -109,21 +109,6 @@ const Register = () => {
             />
           )}
         </div>
-
-        <div className="text-center mt-8 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} LinkUp. All rights reserved.</p>
-          <div className="flex justify-center space-x-4 mt-2">
-            <button className="hover:text-primary transition-colors duration-200">
-              Privacy Policy
-            </button>
-            <button className="hover:text-primary transition-colors duration-200">
-              Terms of Service
-            </button>
-            <button className="hover:text-primary transition-colors duration-200">
-              Support
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

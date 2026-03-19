@@ -45,16 +45,25 @@ export const serviceConfig = {
   },
 
   // Redis Service
-  redis: {
-    url: env.REDIS_URL,
-    host: env.REDIS_HOST,
-    port: env.REDIS_PORT,
-    maxRetriesPerRequest: 3,
-    retryDelayOnFailover: 100,
-    enableReadyCheck: true,
-    connectTimeout: 10000,
-    lazyConnect: true,
+redis: {
+  url: env.REDIS_URL,
+  host: env.REDIS_HOST,
+  port: env.REDIS_PORT,
+  maxRetriesPerRequest: 3,
+  retryDelayOnFailover: 100,
+  enableReadyCheck: true,
+  connectTimeout: 10000,
+  lazyConnect: true,
+
+  // Adapter clients (pub/sub pair — separate from cache client)
+  adapter: {
+    maxRetriesPerRequest: null as null,
+    enableReadyCheck: false,
+    lazyConnect: true,   // ← ADDED
+    retryStrategy: (times: number): number | null =>
+      times > 5 ? null : Math.min(times * 500, 3000),
   },
+},
 
   // Socket Service
   socket: {

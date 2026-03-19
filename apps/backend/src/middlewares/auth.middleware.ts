@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/user.model';
+import { setSentryUser } from '../config/sentry';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -17,7 +18,7 @@ export const authenticate = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader?.startsWith('Bearer ')) {
       res.status(401).json({ success: false, message: 'No token provided' });
       return;
     }
@@ -46,6 +47,8 @@ export const authenticate = async (
     }
 
     req.user = { _id: user._id.toString(), role: user.role };
+    // Set Sentry user context for error tracking
+    setSentryUser({ id: user._id.toString(), role: user.role });
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {

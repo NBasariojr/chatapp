@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import type { ComponentProps } from "react";
@@ -6,6 +6,7 @@ import type { RootState } from "redux/store";
 import AppIcon from "../../components/AppIcon";
 import Button from "../../components/ui/Button";
 import NotificationBadge from "../../components/ui/NotificationBadge";
+import NotificationPanel from "../../components/ui/NotificationPanel";
 import UserMenu from "../../components/ui/UserMenu";
 import SearchOverlay from "../../components/ui/SearchOverlay";
 import FriendRequests from "../../components/ui/FriendRequests";
@@ -44,45 +45,29 @@ const Header = () => {
     const currentUser = useSelector((state: RootState) => state.auth.user);
     const unreadCounts = useSelector(
         // Derive from chatSlice once unreadCounts is added to ChatState
-        // For now returns empty object — badges will show 0
         (state: RootState) =>
             (state.chat as unknown as { unreadCounts?: Record<string, number> })
                 .unreadCounts ?? {}
     );
 
-    const [isSearchOpen, setIsSearchOpen] = useState(false);
-    const [isFriendRequestsOpen, setIsFriendRequestsOpen] = useState(false);
+    const [activeOverlay, setActiveOverlay] = useState<'search' | 'friendRequests' | 'notifications' | null>(null);
     const [friendRequestCount, setFriendRequestCount] = useState(0);
+
+    const handleFriendRequestHandled = useCallback(async () => {
+        try {
+            const requests = await chatService.getFriendRequests();
+            setFriendRequestCount(requests?.length || 0);
+        } catch (error) {
+            console.error('Failed to fetch friend requests:', error);
+        }
+    }, []);
 
     // Fetch friend requests count
     useEffect(() => {
-        const fetchFriendRequestCount = async () => {
-            try {
-                const requests = await chatService.getFriendRequests();
-                setFriendRequestCount(requests?.length || 0);
-            } catch (error) {
-                console.error('Failed to fetch friend requests:', error);
-            }
-        };
-
-        fetchFriendRequestCount();
-        // Poll for new requests every 30 seconds
-        const interval = setInterval(fetchFriendRequestCount, 30000);
+        handleFriendRequestHandled(); // initial fetch on mount
+        const interval = setInterval(handleFriendRequestHandled, 30000);
         return () => clearInterval(interval);
-    }, []);
-
-    const handleFriendRequestHandled = () => {
-        // Refresh the friend request count immediately
-        const fetchFriendRequestCount = async () => {
-            try {
-                const requests = await chatService.getFriendRequests();
-                setFriendRequestCount(requests?.length || 0);
-            } catch (error) {
-                console.error('Failed to fetch friend requests:', error);
-            }
-        };
-        fetchFriendRequestCount();
-    };
+    }, [handleFriendRequestHandled]);
 
     // Derive total unread from all rooms
     const totalUnread = Object.values(unreadCounts).reduce(
@@ -133,15 +118,16 @@ const Header = () => {
                 <div className="flex items-center justify-between h-16 px-4">
 
                     {/* ── Logo ── */}
-                    <div
-                        className="flex items-center space-x-2 cursor-pointer"
+                    <Button
+                        variant="ghost"
                         onClick={() => navigate("/chat-dashboard")}
+                        className="flex items-center space-x-2 p-2 hover:bg-accent/50 transition-colors duration-200"
                     >
                         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                             <AppIcon name="MessageSquare" size={20} color="white" />
                         </div>
                         <span className="text-xl font-semibold text-foreground">LinkUp</span>
-                    </div>
+                    </Button>
 
                     {/* ── Desktop Nav ── */}
                     <nav className="hidden md:flex items-center space-x-1">
@@ -154,10 +140,10 @@ const Header = () => {
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setIsSearchOpen((prev) => !prev)}
+                            onClick={() => setActiveOverlay(activeOverlay === 'search' ? null : 'search')}
                             className="hover:bg-accent/50 transition-colors duration-200"
                         >
-                            <AppIcon name={isSearchOpen ? "X" : "Search"} size={20} />
+                            <AppIcon name={activeOverlay === 'search' ? "X" : "Search"} size={20} />
                         </Button>
 
                         {/* Friend Requests */}
@@ -165,7 +151,7 @@ const Header = () => {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setIsFriendRequestsOpen((prev) => !prev)}
+                                onClick={() => setActiveOverlay(activeOverlay === 'friendRequests' ? null : 'friendRequests')}
                                 className="hover:bg-accent/50 transition-colors duration-200"
                             >
                                 <AppIcon name="UserPlus" size={20} />
@@ -183,9 +169,10 @@ const Header = () => {
                             <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => setActiveOverlay(activeOverlay === 'notifications' ? null : 'notifications')}
                                 className="hover:bg-accent/50 transition-colors duration-200"
                             >
-                                <AppIcon name="Bell" size={20} />
+                                <AppIcon name={activeOverlay === 'notifications' ? "X" : "Bell"} size={20} />
                             </Button>
                             {totalUnread > 0 && (
                                 <NotificationBadge
@@ -208,13 +195,17 @@ const Header = () => {
                 </div>
             </header>
             <SearchOverlay
-                isOpen={isSearchOpen}
-                onClose={() => setIsSearchOpen(false)}
+                isOpen={activeOverlay === 'search'}
+                onClose={() => setActiveOverlay(null)}
             />
             <FriendRequests
-                isOpen={isFriendRequestsOpen}
-                onClose={() => setIsFriendRequestsOpen(false)}
+                isOpen={activeOverlay === 'friendRequests'}
+                onClose={() => setActiveOverlay(null)}
                 onRequestHandled={handleFriendRequestHandled}
+            />
+            <NotificationPanel
+                isOpen={activeOverlay === 'notifications'}
+                onClose={() => setActiveOverlay(null)}
             />
         </>
     );
