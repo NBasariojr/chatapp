@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
-import Icon from '../components/AppIcon';
 
 const NotFound = () => {
   const navigate = useNavigate();
@@ -29,7 +28,7 @@ const NotFound = () => {
             variant="default"
             iconName="ArrowLeft"
             iconPosition="left"
-            onClick={() => window.history?.back()}
+            onClick={() => globalThis.window?.history?.back()}
           >
             Go Back
           </Button>

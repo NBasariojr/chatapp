@@ -60,23 +60,52 @@ const chatSlice = createSlice({
     setActiveRoom(state, action: PayloadAction<string | null>) {
       state.activeRoomId = action.payload;
     },
+
     addMessage(
       state,
       action: PayloadAction<{ roomId: string; message: Message }>,
     ) {
       const { roomId, message } = action.payload;
       if (!state.messages[roomId]) state.messages[roomId] = [];
-
       const alreadyExists = state.messages[roomId].some(
         (m) => m._id === message._id,
       );
       if (alreadyExists) return;
-
       state.messages[roomId].push(message);
-
       const room = state.rooms.find((r) => r._id === roomId);
       if (room) room.lastMessage = message;
     },
+
+    // ← ADDED: called by socket.service when message:deleted fires
+    removeMessage(
+      state,
+      action: PayloadAction<{ roomId: string; messageId: string }>,
+    ) {
+      const { roomId, messageId } = action.payload;
+      if (!state.messages[roomId]) return;
+      state.messages[roomId] = state.messages[roomId].filter(
+        (m) => m._id !== messageId,
+      );
+      // Clear lastMessage on the room if it was the one deleted
+      const room = state.rooms.find((r) => r._id === roomId);
+      if (room?.lastMessage?._id === messageId) {
+        room.lastMessage = undefined;
+      }
+    },
+
+    // ← ADDED: called by socket.service when message:updated fires
+    updateMessage(
+      state,
+      action: PayloadAction<{ roomId: string; messageId: string; content: string }>,
+    ) {
+      const { roomId, messageId, content } = action.payload;
+      if (!state.messages[roomId]) return;
+      const message = state.messages[roomId].find((m) => m._id === messageId);
+      if (message) {
+        message.content = content;
+      }
+    },
+
     setTyping(
       state,
       action: PayloadAction<{
@@ -87,7 +116,6 @@ const chatSlice = createSlice({
     ) {
       const { roomId, userId, isTyping } = action.payload;
       if (!state.typingUsers[roomId]) state.typingUsers[roomId] = [];
-
       if (isTyping) {
         if (!state.typingUsers[roomId].includes(userId)) {
           state.typingUsers[roomId].push(userId);
@@ -98,6 +126,7 @@ const chatSlice = createSlice({
         );
       }
     },
+
     updateUserStatus(
       state,
       action: PayloadAction<{ userId: string; isOnline: boolean }>,
@@ -109,6 +138,7 @@ const chatSlice = createSlice({
       });
     },
   },
+
   extraReducers: (builder) => {
     builder
       .addCase(fetchRooms.fulfilled, (state, action) => {
@@ -121,6 +151,13 @@ const chatSlice = createSlice({
   },
 });
 
-export const { setActiveRoom, addMessage, setTyping, updateUserStatus } =
-  chatSlice.actions;
+export const {
+  setActiveRoom,
+  addMessage,
+  removeMessage,    // ← ADDED
+  updateMessage,    // ← ADDED
+  setTyping,
+  updateUserStatus,
+} = chatSlice.actions;
+
 export default chatSlice.reducer;

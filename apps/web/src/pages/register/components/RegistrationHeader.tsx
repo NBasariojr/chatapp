@@ -17,7 +17,7 @@ const RegistrationHeader = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 p-4 bg-card/50 rounded-lg border border-border">
+      {/*<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 p-4 bg-card/50 rounded-lg border border-border">
         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
           <Icon name="Shield" size={16} className="text-primary" />
           <span>Secure messaging</span>
@@ -30,7 +30,7 @@ const RegistrationHeader = () => {
           <Icon name="Zap" size={16} className="text-primary" />
           <span>Real-time sync</span>
         </div>
-      </div>
+      </div>*/}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import type { ComponentProps } from "react";
@@ -6,6 +6,7 @@ import type { RootState } from "redux/store";
 import AppIcon from "../../components/AppIcon";
 import Button from "../../components/ui/Button";
 import NotificationBadge from "../../components/ui/NotificationBadge";
+import NotificationPanel from "../../components/ui/NotificationPanel";
 import UserMenu from "../../components/ui/UserMenu";
 import SearchOverlay from "../../components/ui/SearchOverlay";
 import FriendRequests from "../../components/ui/FriendRequests";
@@ -52,37 +53,24 @@ const Header = () => {
 
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isFriendRequestsOpen, setIsFriendRequestsOpen] = useState(false);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [friendRequestCount, setFriendRequestCount] = useState(0);
+
+    const handleFriendRequestHandled = useCallback(async () => {
+        try {
+            const requests = await chatService.getFriendRequests();
+            setFriendRequestCount(requests?.length || 0);
+        } catch (error) {
+            console.error('Failed to fetch friend requests:', error);
+        }
+    }, []);
 
     // Fetch friend requests count
     useEffect(() => {
-        const fetchFriendRequestCount = async () => {
-            try {
-                const requests = await chatService.getFriendRequests();
-                setFriendRequestCount(requests?.length || 0);
-            } catch (error) {
-                console.error('Failed to fetch friend requests:', error);
-            }
-        };
-
-        fetchFriendRequestCount();
-        // Poll for new requests every 30 seconds
-        const interval = setInterval(fetchFriendRequestCount, 30000);
+        handleFriendRequestHandled(); // initial fetch on mount
+        const interval = setInterval(handleFriendRequestHandled, 30000);
         return () => clearInterval(interval);
-    }, []);
-
-    const handleFriendRequestHandled = () => {
-        // Refresh the friend request count immediately
-        const fetchFriendRequestCount = async () => {
-            try {
-                const requests = await chatService.getFriendRequests();
-                setFriendRequestCount(requests?.length || 0);
-            } catch (error) {
-                console.error('Failed to fetch friend requests:', error);
-            }
-        };
-        fetchFriendRequestCount();
-    };
+    }, [handleFriendRequestHandled]);
 
     // Derive total unread from all rooms
     const totalUnread = Object.values(unreadCounts).reduce(
@@ -183,9 +171,10 @@ const Header = () => {
                             <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => setIsNotificationsOpen((prev) => !prev)}
                                 className="hover:bg-accent/50 transition-colors duration-200"
                             >
-                                <AppIcon name="Bell" size={20} />
+                                <AppIcon name={isNotificationsOpen ? "X" : "Bell"} size={20} />
                             </Button>
                             {totalUnread > 0 && (
                                 <NotificationBadge
@@ -215,6 +204,10 @@ const Header = () => {
                 isOpen={isFriendRequestsOpen}
                 onClose={() => setIsFriendRequestsOpen(false)}
                 onRequestHandled={handleFriendRequestHandled}
+            />
+            <NotificationPanel
+                isOpen={isNotificationsOpen}
+                onClose={() => setIsNotificationsOpen(false)}
             />
         </>
     );

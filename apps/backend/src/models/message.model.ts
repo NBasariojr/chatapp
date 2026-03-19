@@ -9,6 +9,8 @@ export interface IMessage extends Document {
   roomId: mongoose.Types.ObjectId;
   mediaUrl?: string;
   replyTo?: mongoose.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const messageSchema = new Schema<IMessage>(

@@ -19,6 +19,7 @@ interface User {
 interface ProfileViewProps {
   user: User;
   showFullName?: boolean;
+  showName?: boolean;
   showStatus?: boolean;
   showLastSeen?: boolean;
   showRole?: boolean;
@@ -56,6 +57,7 @@ const getLastSeenText = (status?: Status, lastSeen?: string | Date) => {
 const ProfileView = ({
   user,
   showFullName = true,
+  showName = true,
   showStatus = true,
   showLastSeen = true,
   showRole = false,
@@ -96,47 +98,49 @@ const ProfileView = ({
         )}
       </div>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center space-x-2">
-          <h4 className={`${config.nameText} font-medium text-foreground truncate`}>
-            {displayName}
-          </h4>
-          {isCurrentUser && (
-            <span className="text-xs text-muted-foreground">(You)</span>
-          )}
-          {showRole && user.role === "admin" && (
-            <Icon name="Crown" size={12} className="text-warning" />
-          )}
-          {showRole && user.role === "moderator" && (
-            <Icon name="Shield" size={12} className="text-primary" />
-          )}
-        </div>
-
-        {showStatus && (
-          <div className="flex items-center space-x-1">
-            <p className={`${config.statusText} text-muted-foreground truncate`}>
-              {showLastSeen
-                ? getLastSeenText(user.status, user.lastSeen)
-                : getStatusText(user.status)}
-            </p>
-            {user.isTyping && (
-              <div className="flex items-center space-x-1">
-                <div className="flex space-x-1">
-                  {[0, 150, 300].map((delay) => (
-                    <div
-                      key={delay}
-                      className="w-1 h-1 bg-primary rounded-full animate-bounce"
-                      style={{ animationDelay: `${delay}ms` }}
-                    />
-                  ))}
-                </div>
-                <span className={`${config.statusText} text-primary`}>typing...</span>
-              </div>
+      {/* Info - only show if showName is true */}
+      {showName && (
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center space-x-2">
+            <h4 className={`${config.nameText} font-medium text-foreground truncate`}>
+              {displayName}
+            </h4>
+            {isCurrentUser && (
+              <span className="text-xs text-muted-foreground">(You)</span>
+            )}
+            {showRole && user.role === "admin" && (
+              <Icon name="Crown" size={12} className="text-warning" />
+            )}
+            {showRole && user.role === "moderator" && (
+              <Icon name="Shield" size={12} className="text-primary" />
             )}
           </div>
-        )}
-      </div>
+
+          {showStatus && (
+            <div className="flex items-center space-x-1">
+              <p className={`${config.statusText} text-muted-foreground truncate`}>
+                {showLastSeen
+                  ? getLastSeenText(user.status, user.lastSeen)
+                  : getStatusText(user.status)}
+              </p>
+              {user.isTyping && (
+                <div className="flex items-center space-x-1">
+                  <div className="flex space-x-1">
+                    {[0, 150, 300].map((delay) => (
+                      <div
+                        key={delay}
+                        className="w-1 h-1 bg-primary rounded-full animate-bounce"
+                        style={{ animationDelay: `${delay}ms` }}
+                      />
+                    ))}
+                  </div>
+                  <span className={`${config.statusText} text-primary`}>typing...</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
