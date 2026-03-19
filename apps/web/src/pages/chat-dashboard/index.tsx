@@ -19,6 +19,7 @@ import ConversationList from "./components/ConversationList";
 import MessageThread from "./components/MessageThread";
 import ConversationDetails from "./components/ConversationDetails";
 import type { Theme } from "./components/ThemeModal";
+import type { SystemEvent } from "./types";
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
 
@@ -59,20 +60,10 @@ const loadRoomSystemEvents = (): Record<string, SystemEvent[]> => {
 const saveRoomSystemEvents = (events: Record<string, SystemEvent[]>): void => {
   try {
     localStorage.setItem(SYSTEM_EVENTS_STORAGE_KEY, JSON.stringify(events));
-  } catch {}
+  } catch (error) {
+    console.error("Error saving room system events:", error);
+  }
 };
-
-// ─── System event type ────────────────────────────────────────────────────────
-export interface SystemEvent {
-  id: string;
-  roomId: string;
-  type: "system";
-  content: string;       // theme name only — e.g. "Sky Garden"
-  timestamp: Date;
-  actorId: string;       // ← added: ID of the user who made the change
-  actorName: string;     // ← added: display name of that user
-}
-// ─────────────────────────────────────────────────────────────────────────────
 
 const ChatDashboard = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -102,7 +93,7 @@ const ChatDashboard = () => {
     setRoomThemes((prev) => ({ ...prev, [activeRoomId]: theme }));
 
     const event: SystemEvent = {
-      id:        `sys-${Date.now()}`,
+      id:        `sys-${crypto.randomUUID()}`,
       roomId:    activeRoomId,
       type:      "system",
       content:   theme.name,    // ← store only the theme name, not the full sentence
@@ -160,6 +151,7 @@ const ChatDashboard = () => {
       await chatService.editMessage(messageId, content);
     } catch (err) {
       console.error("[handleEditMessage] Failed:", err);
+      alert(`Failed to edit message: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -168,6 +160,7 @@ const ChatDashboard = () => {
       await chatService.deleteMessage(messageId);
     } catch (err) {
       console.error("[handleDeleteMessage] Failed:", err);
+      alert(`Failed to delete message: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 

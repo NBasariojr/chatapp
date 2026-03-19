@@ -3,7 +3,7 @@ import { get } from 'node:http';
 
 const options = {
   host: 'localhost',
-  port: 4000,
+  port: process.env.PORT || 4000,
   path: '/health',
   timeout: 2000
 };

@@ -20,10 +20,11 @@ import type { Message } from '@chatapp/shared';
 const SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
 let socket: Socket | null = null;
+let socketToken: string | null = null;
 
 export const connectSocket = (token: string): Socket => {
-  if (socket?.active) {
-    console.log('⚡ Socket already active, reusing existing connection');
+  if (socket?.active && socketToken === token) {
+    console.log('⚡ Socket already active with same token, reusing existing connection');
     return socket;
   }
 
@@ -31,8 +32,10 @@ export const connectSocket = (token: string): Socket => {
     socket.removeAllListeners();
     socket.disconnect();
     socket = null;
+    socketToken = null;
   }
 
+  socketToken = token;
   socket = io(SOCKET_URL, {
     auth: { token },
     reconnection: true,
@@ -103,8 +106,12 @@ export const connectSocket = (token: string): Socket => {
 };
 
 export const disconnectSocket = (): void => {
-  socket?.disconnect();
-  socket = null;
+  if (socket) {
+    socket.removeAllListeners();
+    socket.disconnect();
+    socket = null;
+    socketToken = null;
+  }
 };
 
 export const getSocket = (): Socket | null => socket;

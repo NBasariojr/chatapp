@@ -107,7 +107,7 @@ export const sendMessage = async (
       populate: { path: "sender", select: "username" },
     });
 
-    await Room.findByIdAndUpdate(roomId, { lastMessage: message._id.toString() });
+    await Room.findByIdAndUpdate(roomId, { lastMessage: String(message._id) });
     await cacheDel(`messages:${roomId.toString()}:page1`);
 
 
@@ -163,8 +163,8 @@ export const editMessage = async (
 
     // Emit the updated content to all clients in the room
     getIO().to(String(message.roomId)).emit('message:updated', {
-      messageId: message._id.toString(),
-      roomId:    message.roomId.toString(),
+      messageId: String(message._id),
+      roomId:    String(message.roomId), // Explicitly convert ObjectId to string
       content:   message.content,
     });
 
@@ -193,7 +193,7 @@ export const deleteMessage = async (
     }
 
     // Sender can delete within 24h; admin can delete any message at any time
-    const isSender = message.sender.equals(req.user?._id);
+    const isSender = message.sender.toString() === req.user?._id.toString();
     const isAdmin = req.user?.role === "admin";
     
     if (!isSender && !isAdmin) {
@@ -210,10 +210,42 @@ export const deleteMessage = async (
       }
     }
 
-    const roomId = message.roomId.toString();
+    const roomId = message.roomId?.toString();
+    if (!roomId) {
+      res.status(500).json({ success: false, message: "Invalid room ID" });
+      return;
+    }
 
     await message.deleteOne();
     await cacheDel(`messages:${roomId}:page1`);
+
+    // Update room's lastMessage if the deleted message was the last one
+    const room = await Room.findById(roomId);
+    if (room?.lastMessage?.toString() === messageId) {
+      const newestMessage = await Message.findOne({ roomId })
+        .sort({ createdAt: -1 })
+        .limit(1);
+      
+      if (newestMessage) {
+        room.lastMessage = newestMessage._id;
+      } else {
+        room.lastMessage = undefined;
+      }
+      await room.save();
+      
+      // Invalidate room cache and emit updated room
+      await cacheDel(`room:${roomId}`);
+      await cacheDel(`room:${roomId}:preview`);
+      getIO().to(roomId).emit('room:updated', { 
+        roomId, 
+        lastMessage: newestMessage ? {
+          _id: String(newestMessage._id),
+          content: newestMessage.content,
+          createdAt: newestMessage.createdAt,
+          sender: String(newestMessage.sender)
+        } : null 
+      });
+    }
 
     // Emit deletion to the room — all clients remove the message from their list
     getIO().to(roomId).emit('message:deleted', { messageId, roomId });

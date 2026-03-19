@@ -1,6 +1,6 @@
 // web/src/components/ui/NotificationPanel.tsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import AppIcon from "components/AppIcon";
 import Button from "components/ui/Button";
 
@@ -19,9 +19,10 @@ interface NotificationPanelProps {
   onClose: () => void;
 }
 
-const NotificationPanel = ({ isOpen, onClose }: NotificationPanelProps) => {
+export const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, onClose }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Escape key + body scroll lock
   useEffect(() => {
@@ -40,42 +41,18 @@ const NotificationPanel = ({ isOpen, onClose }: NotificationPanelProps) => {
     };
   }, [isOpen, onClose]);
 
-  // Mock notifications data (replace with actual API call)
+  // Initialize notifications - empty until real API is connected
   useEffect(() => {
     if (isOpen) {
-      setLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        setNotifications([
-          {
-            id: "1",
-            type: "message",
-            title: "New message from John",
-            message: "Hey! How are you doing?",
-            timestamp: new Date(Date.now() - 1000 * 60 * 5), // 5 minutes ago
-            read: false,
-            from: "John Doe"
-          },
-          {
-            id: "2",
-            type: "friend_request",
-            title: "Friend request from Sarah",
-            message: "Sarah wants to be your friend",
-            timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-            read: false,
-            from: "Sarah Wilson"
-          },
-          {
-            id: "3",
-            type: "system",
-            title: "Welcome to LinkUp",
-            message: "Get started by exploring the features",
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-            read: true
-          }
-        ]);
-        setLoading(false);
-      }, 500);
+      setNotifications([]);
+      setLoading(false);
+    }
+  }, [isOpen]);
+
+  // Focus management for accessibility
+  useEffect(() => {
+    if (isOpen && panelRef.current) {
+      panelRef.current.focus();
     }
   }, [isOpen]);
 
@@ -129,6 +106,11 @@ const NotificationPanel = ({ isOpen, onClose }: NotificationPanelProps) => {
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="notifications-title"
+        tabIndex={-1}
         className="flex flex-col h-full max-w-2xl mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
@@ -136,7 +118,7 @@ const NotificationPanel = ({ isOpen, onClose }: NotificationPanelProps) => {
         <div className="flex items-center justify-between p-4 border-b border-border bg-card">
           <div className="flex items-center space-x-3">
             <AppIcon name="Bell" size={24} className="text-primary" />
-            <h2 className="text-lg font-semibold text-foreground">Notifications</h2>
+            <h2 id="notifications-title" className="text-lg font-semibold text-foreground">Notifications</h2>
             {unreadCount > 0 && (
               <span className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded-full">
                 {unreadCount}
@@ -149,7 +131,7 @@ const NotificationPanel = ({ isOpen, onClose }: NotificationPanelProps) => {
                 Mark all read
               </Button>
             )}
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close notifications">
               <AppIcon name="X" size={20} />
             </Button>
           </div>
@@ -181,6 +163,14 @@ const NotificationPanel = ({ isOpen, onClose }: NotificationPanelProps) => {
                     !notification.read ? "border-primary/20" : "border-border"
                   }`}
                   onClick={() => markAsRead(notification.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      markAsRead(notification.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">

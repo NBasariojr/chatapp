@@ -28,7 +28,7 @@ const NotFound = () => {
             variant="default"
             iconName="ArrowLeft"
             iconPosition="left"
-            onClick={() => globalThis.window?.history?.back()}
+            onClick={() => navigate(-1)}
           >
             Go Back
           </Button>

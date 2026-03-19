@@ -45,6 +45,13 @@ function App() {
     // The socket persists for the entire authenticated session.
   }, [token]);
 
+  // Cleanup socket on component unmount (StrictMode support)
+  useEffect(() => {
+    return () => {
+      disconnectSocket();
+    };
+  }, []);
+
   return <Routes />;
 }
 

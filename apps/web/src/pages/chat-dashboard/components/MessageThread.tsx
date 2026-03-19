@@ -9,7 +9,7 @@ import MessageInput from "./MessageInput";
 import { setActiveRoom } from "../../../redux/slices/chatSlice";
 import type { ReplyPreview } from "@chatapp/shared";
 import type { Theme } from "./ThemeModal";
-import type { SystemEvent } from "../index";
+import type { SystemEvent } from "../types";
 
 interface Sender {
   id: string;

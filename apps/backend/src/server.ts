@@ -128,7 +128,15 @@ const startServer = async (): Promise<void> => {
   }
 };
 
+let isShuttingDown = false;
+
 const gracefulShutdown = async () => {
+  if (isShuttingDown) {
+    console.log("Shutdown already in progress, ignoring duplicate signal");
+    return;
+  }
+  
+  isShuttingDown = true;
   const forceExit = setTimeout(() => {
     console.error("Forceful shutdown after 10s timeout.");
     process.exit(1);
@@ -156,10 +164,10 @@ const gracefulShutdown = async () => {
 };
 
 // Graceful shutdown with proper order and force timeout
-process.on("SIGTERM", gracefulShutdown);
+process.once("SIGTERM", gracefulShutdown);
 
 // Handle SIGINT (Ctrl+C) same as SIGTERM
-process.on("SIGINT", gracefulShutdown);
+process.once("SIGINT", gracefulShutdown);
 
 startServer();
 export { io };
