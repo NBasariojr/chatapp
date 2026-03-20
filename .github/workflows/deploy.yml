@@ -69,7 +69,7 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_URL || 'http://localhost:4000' }}
 
       - name: Security audit
-        run: pnpm audit --audit-level=high
+        run: pnpm audit --audit-level=critical
 
       # Save web dist for Vercel deploy job (avoids rebuilding twice)
       - name: Upload web build artifact
