@@ -41,3 +41,5 @@ Thumbs.db
 
 #Project Memory
 PROJECT_MEMORY.md
+.vercel
+.env*.local

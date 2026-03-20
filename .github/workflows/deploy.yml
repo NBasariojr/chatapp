@@ -1,0 +1,252 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPLOY — ChatApp
+# Runs on: push to `main` (after merging from `dev`)
+# Jobs: CI gate → deploy web (Vercel) → push backend image (GHCR)
+#
+# Required secrets (add in GitHub → Settings → Secrets → Actions):
+#   VERCEL_TOKEN          — from vercel.com/account/tokens
+#   VERCEL_ORG_ID         — from .vercel/project.json after `vercel link`
+#   VERCEL_PROJECT_ID     — from .vercel/project.json after `vercel link`
+#
+# Optional secrets (only if you have a server to deploy backend to):
+#   DEPLOY_SSH_HOST       — IP or hostname of your server
+#   DEPLOY_SSH_USER       — SSH username (e.g. ubuntu)
+#   DEPLOY_SSH_KEY        — private SSH key (contents, not path)
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Only one deploy runs at a time — prevents race conditions on production
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false  # Do NOT cancel in-progress deploys
+
+env:
+  CI: true
+  PNPM_VERSION: "8.15.0"
+  NODE_VERSION: "20"
+  # GitHub Container Registry namespace
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ───────────────────────────────────────────────
+  # 1. RE-RUN CI GATE
+  # Re-validates the commit before deploying.
+  # Guards against pushing directly to main without
+  # going through a PR (which would skip ci.yml).
+  # ───────────────────────────────────────────────
+  ci-gate:
+    name: "CI Gate"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Build all apps
+        run: pnpm build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL || 'http://localhost:4000' }}
+
+      - name: Security audit
+        run: pnpm audit --audit-level=high
+
+      # Save web dist for Vercel deploy job (avoids rebuilding twice)
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: apps/web/dist
+          retention-days: 1
+
+  # ───────────────────────────────────────────────
+  # 2. DEPLOY WEB → VERCEL
+  # Deploys the pre-built web dist to Vercel.
+  # Uses the Vercel CLI directly (not the GitHub
+  # integration) so you keep full CI control.
+  # ───────────────────────────────────────────────
+  deploy-web:
+    name: "Deploy Web → Vercel"
+    runs-on: ubuntu-latest
+    needs: [ci-gate]
+    environment:
+      name: production
+      url: ${{ steps.vercel-deploy.outputs.deployment-url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@latest
+
+      # Pull Vercel environment config (.vercel/project.json + env vars)
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Build via Vercel CLI (uses your vercel.json config)
+      - name: Build with Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Deploy the pre-built output
+      - name: Deploy to Vercel production
+        id: vercel-deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "deployment-url=$url" >> "$GITHUB_OUTPUT"
+          echo "✅ Deployed to: $url"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  # ───────────────────────────────────────────────
+  # 3. BUILD & PUSH BACKEND IMAGE → GHCR
+  # Builds the backend Docker image and pushes it
+  # to GitHub Container Registry (free, built-in).
+  # Image: ghcr.io/<your-org>/chatapp/backend:<sha>
+  #        ghcr.io/<your-org>/chatapp/backend:latest
+  #
+  # To deploy: SSH into your server and pull the
+  # new image (see optional step at bottom).
+  # ───────────────────────────────────────────────
+  push-backend-image:
+    name: "Push Backend Image → GHCR"
+    runs-on: ubuntu-latest
+    needs: [ci-gate]
+    permissions:
+      contents: read
+      packages: write  # Required to push to ghcr.io
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN is auto-provided — no extra secret needed
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+          tags: |
+            # Tag with full commit SHA (immutable, for rollbacks)
+            type=sha,prefix=sha-,format=long
+            # Tag with short SHA for convenience
+            type=sha,prefix=,format=short
+            # Tag as latest on every push to main
+            type=raw,value=latest
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Reuse CI cache layers — significantly speeds up builds
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+          # Pass build-time args if your Dockerfile uses them
+          build-args: |
+            NODE_VERSION=${{ env.NODE_VERSION }}
+
+  # ───────────────────────────────────────────────
+  # 4. DEPLOY BACKEND (OPTIONAL — SSH)
+  # Uncomment this job when you have a server.
+  # It SSHs in and runs `docker pull && docker up`.
+  #
+  # Required secrets to add first:
+  #   DEPLOY_SSH_HOST, DEPLOY_SSH_USER, DEPLOY_SSH_KEY
+  # ───────────────────────────────────────────────
+  # deploy-backend:
+  #   name: "Deploy Backend → Server"
+  #   runs-on: ubuntu-latest
+  #   needs: [push-backend-image]
+  #   environment:
+  #     name: production
+  #   steps:
+  #     - name: Deploy via SSH
+  #       uses: appleboy/ssh-action@v1
+  #       with:
+  #         host: ${{ secrets.DEPLOY_SSH_HOST }}
+  #         username: ${{ secrets.DEPLOY_SSH_USER }}
+  #         key: ${{ secrets.DEPLOY_SSH_KEY }}
+  #         script: |
+  #           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+  #           docker pull ghcr.io/${{ github.repository }}/backend:latest
+  #           cd /opt/chatapp
+  #           docker compose pull backend
+  #           docker compose up -d backend
+  #           docker image prune -f
+
+  # ───────────────────────────────────────────────
+  # 5. DEPLOYMENT SUMMARY
+  # Prints a summary to the Actions run page.
+  # ───────────────────────────────────────────────
+  deployment-summary:
+    name: "Deployment Summary"
+    runs-on: ubuntu-latest
+    needs: [deploy-web, push-backend-image]
+    if: always()
+    steps:
+      - name: Write summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | Status | Commit |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Web (Vercel) | ${{ needs.deploy-web.result }} | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend (GHCR) | ${{ needs.push-backend-image.result }} | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: \`${{ github.ref_name }}\`  " >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY

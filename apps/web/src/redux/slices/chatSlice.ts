@@ -3,7 +3,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import type { Room, Message } from "@chatapp/shared";
 import { chatService } from "../../services/chat.service";
 
-interface ChatState {
+export interface ChatState {
   rooms: Room[];
   activeRoomId: string | null;
   messages: Record<string, Message[]>;

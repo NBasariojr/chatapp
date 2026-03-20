@@ -5,7 +5,7 @@ import { authService } from 'services/auth.service';
 type AsyncStatus = 'idle' | 'loading' | 'success' | 'error';
 
 // State Shape
-interface AuthState {
+export interface AuthState {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;     // Local auth: login / register / fetchMe
