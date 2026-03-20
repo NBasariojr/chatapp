@@ -1,0 +1,242 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI — ChatApp
+# Runs on: push to `dev`, any PR targeting `main`
+# Jobs: type-check → lint (guarded) → build → docker-build → security-audit
+# ─────────────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+# Cancel redundant runs on the same branch/PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Tells pnpm/Node to skip optional/platform-specific installs in CI
+  CI: true
+  PNPM_VERSION: "8.15.0"
+  NODE_VERSION: "20"
+
+jobs:
+  # ───────────────────────────────────────────────
+  # 1. TYPE-CHECK
+  # Runs TypeScript compiler without emitting files.
+  # Catches type errors before they reach review.
+  # ───────────────────────────────────────────────
+  type-check:
+    name: "Type Check"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run type check
+        run: pnpm typecheck
+
+  # ───────────────────────────────────────────────
+  # 2. LINT (GUARDED)
+  # Only runs if an ESLint config exists.
+  # Won't fail CI until you add a real ESLint setup.
+  # Remove the guard once eslint.config.js is added.
+  # ───────────────────────────────────────────────
+  lint:
+    name: "Lint (guarded)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for ESLint config
+        id: lint-guard
+        run: |
+          if [ -f "eslint.config.js" ] || \
+             [ -f "eslint.config.mjs" ] || \
+             [ -f ".eslintrc.json" ] || \
+             [ -f ".eslintrc.js" ] || \
+             [ -f ".eslintrc.yml" ]; then
+            echo "has_eslint=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_eslint=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No ESLint config found — lint step skipped. Add eslint.config.js to enable."
+          fi
+
+      - name: Setup pnpm
+        if: steps.lint-guard.outputs.has_eslint == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        if: steps.lint-guard.outputs.has_eslint == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        if: steps.lint-guard.outputs.has_eslint == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint
+        if: steps.lint-guard.outputs.has_eslint == 'true'
+        run: pnpm lint
+
+  # ───────────────────────────────────────────────
+  # 3. BUILD
+  # Compiles/bundles all apps. Catches build-time
+  # errors that type-check alone won't catch
+  # (e.g. missing assets, bad Vite configs).
+  # ───────────────────────────────────────────────
+  build:
+    name: "Build"
+    runs-on: ubuntu-latest
+    needs: [type-check]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all apps
+        run: pnpm build
+        env:
+          # Provide dummy values so Vite doesn't throw on missing env vars.
+          # These are build-time only and do not expose real secrets.
+          VITE_API_URL: "http://localhost:4000"
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: apps/web/dist
+          retention-days: 7
+
+      - name: Upload backend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist-${{ github.sha }}
+          path: apps/backend/dist
+          retention-days: 7
+
+  # ───────────────────────────────────────────────
+  # 4. DOCKER BUILD (validation only — no push)
+  # Validates that both Dockerfiles build cleanly.
+  # Uses Docker layer caching to keep runs fast.
+  # Push happens only in deploy.yml on main.
+  # ───────────────────────────────────────────────
+  docker-build:
+    name: "Docker Build (validate)"
+    runs-on: ubuntu-latest
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, backend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.app }} image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: false
+          # Cache layers between CI runs using GitHub Actions cache
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+          tags: chatapp/${{ matrix.app }}:ci-${{ github.sha }}
+
+  # ───────────────────────────────────────────────
+  # 5. SECURITY AUDIT
+  # Scans for known CVEs in your npm dependency
+  # tree. Fails only on HIGH or CRITICAL severity
+  # so noisy low/moderate advisories don't block PRs.
+  # ───────────────────────────────────────────────
+  security:
+    name: "Security Audit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run security audit
+        # --audit-level=high: only fail on HIGH/CRITICAL CVEs
+        # This prevents low-severity noise from blocking your PRs
+        run: pnpm audit --audit-level=high
+        continue-on-error: false
+
+  # ───────────────────────────────────────────────
+  # 6. CI STATUS GATE
+  # Single required check for branch protection.
+  # Set THIS job as the required status check in
+  # GitHub Settings → Branches → main protection.
+  # You don't need to add each individual job.
+  # ───────────────────────────────────────────────
+  ci-pass:
+    name: "CI ✓"
+    runs-on: ubuntu-latest
+    needs: [type-check, lint, build, docker-build, security]
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          results='${{ toJSON(needs) }}'
+          # lint is allowed to be skipped (guarded), all others must pass
+          failed=$(echo "$results" | \
+            jq -r 'to_entries[] | select(.key != "lint") | select(.value.result != "success") | .key')
+          if [ -n "$failed" ]; then
+            echo "❌ The following required jobs did not pass:"
+            echo "$failed"
+            exit 1
+          fi
+          echo "✅ All required CI jobs passed."
