@@ -36,9 +36,9 @@ export const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string(),
 
   // Sentry (optional — app runs without it, but warn in production)
-  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_DSN: z.string().url().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
   // Set to git SHA in CI/CD: SENTRY_RELEASE=$(git rev-parse --short HEAD)
-  SENTRY_RELEASE: z.string().optional(),
+  SENTRY_RELEASE: z.string().optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
 
   // Feature Flags
   ENABLE_NEW_CHAT: z.coerce.boolean().default(false),
