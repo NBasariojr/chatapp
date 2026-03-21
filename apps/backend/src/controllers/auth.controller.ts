@@ -6,12 +6,14 @@ import { User } from "../models/user.model";
 import { cacheSet, cacheDel, getRedis } from "../config/redis";
 import { generateResetToken, hashToken } from "../utils/token";
 import { sendEmail, buildPasswordResetEmail } from "../utils/email";
+import { ObjectIdToString } from "../utils/objectId";
 import {
   exchangeAndVerifyGoogleCode,
   upsertGoogleUser,
 } from "../services/oauth.service";
-import { OAuthVerificationError, ValidationError, ConflictError, NotFoundError, UnauthorizedError } from "../utils/errors";
+import { ValidationError, ConflictError, NotFoundError, UnauthorizedError } from "../utils/errors";
 import { config, jwt } from "../config";
+import { logAuditEvent } from "../services/audit.service";
 
 // Schemas
 const registerSchema = z.object({
@@ -97,15 +99,16 @@ export const register = async (
     }
     const user = await User.create({ username, email, password });
     const token = generateToken(
-      user._id.toString(),
+      ObjectIdToString(user._id),
       user.role,
       user.authProvider,
     );
     await cacheSet(
-      `session:${user._id}`,
-      { userId: user._id, role: user.role },
+      `session:${ObjectIdToString(user._id)}`,
+      { userId: ObjectIdToString(user._id), role: user.role },
       7 * 24 * 60 * 60,
     );
+    logAuditEvent({ action: 'auth.register.success', req, userId: ObjectIdToString(user._id), email });
     res.status(201).json({
       success: true,
       data: { user, token },
@@ -142,23 +145,25 @@ export const login = async (
     }
 
     if (!(await user.comparePassword(password))) {
+      logAuditEvent({ action: 'auth.login.failure', req, email, metadata: { reason: 'invalid_password' } });
       throw new UnauthorizedError("Invalid email or password");
     }
 
     const token = generateToken(
-      user._id.toString(),
+      ObjectIdToString(user._id),
       user.role,
       user.authProvider,
     );
-    await User.findByIdAndUpdate(user._id, {
+    await User.findByIdAndUpdate(ObjectIdToString(user._id), {
       isOnline: true,
       lastSeen: new Date(),
     });
     await cacheSet(
-      `session:${user._id}`,
-      { userId: user._id, role: user.role },
+      `session:${ObjectIdToString(user._id)}`,
+      { userId: ObjectIdToString(user._id), role: user.role },
       7 * 24 * 60 * 60,
     );
+    logAuditEvent({ action: 'auth.login.success', req, userId: ObjectIdToString(user._id), email });
     res.json({
       success: true,
       data: { user, token },
@@ -183,6 +188,7 @@ export const logout = async (
       });
       await cacheDel(`session:${userId}`);
     }
+    logAuditEvent({ action: 'auth.logout', req, userId: userId?.toString() });
     res.json({ success: true, message: "Logged out successfully" });
   } catch (error) {
     next(error);
@@ -230,7 +236,7 @@ export const forgotPassword = async (
     const { rawToken, hashedToken } = generateResetToken();
     const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
-    await User.findByIdAndUpdate(user._id, {
+    await User.findByIdAndUpdate(ObjectIdToString(user._id), {
       passwordResetToken: hashedToken,
       passwordResetExpires: new Date(Date.now() + FIFTEEN_MINUTES_MS),
     });
@@ -244,13 +250,14 @@ export const forgotPassword = async (
         html: buildPasswordResetEmail(resetUrl, user.username),
       });
     } catch (emailError) {
-      await User.findByIdAndUpdate(user._id, {
+      await User.findByIdAndUpdate(ObjectIdToString(user._id), {
         $unset: { passwordResetToken: "", passwordResetExpires: "" },
       });
       console.error("[forgotPassword] Email send error:", emailError);
       throw new Error("Failed to send reset email. Please try again.");
     }
 
+    logAuditEvent({ action: 'auth.password_reset.requested', req, userId: ObjectIdToString(user._id), email: user.email });
     res.json(GENERIC_RESET_RESPONSE);
   } catch (error) {
     next(error);
@@ -318,7 +325,7 @@ export const resetPassword = async (
     const hashedPassword = await bcrypt.hash(password, salt);
     const passwordChangedAt = new Date(Date.now() - 1000);
 
-    await User.findByIdAndUpdate(user._id, {
+    await User.findByIdAndUpdate(ObjectIdToString(user._id), {
       $set: {
         password: hashedPassword,
         passwordChangedAt,
@@ -327,12 +334,12 @@ export const resetPassword = async (
       },
       $unset: { passwordResetToken: "", passwordResetExpires: "" },
     });
-
+    logAuditEvent({ action: 'auth.password_reset.completed', req, userId: ObjectIdToString(user._id) });
     try {
-      await cacheDel(`session:${user._id}`);
+      await cacheDel(`session:${ObjectIdToString(user._id)}`);
       const redis = getRedis();
       await redis.publish(
-        `user:logout:${user._id}`,
+        `user:logout:${ObjectIdToString(user._id)}`,
         JSON.stringify({ reason: "password_reset" }),
       );
     } catch {
@@ -367,33 +374,31 @@ export const googleAuth = async (
     const user = await upsertGoogleUser(googleUserInfo);
 
     const token = generateToken(
-      user._id.toString(),
+      ObjectIdToString(user._id),
       user.role,
       user.authProvider,
     );
 
     try {
       await cacheSet(
-        `session:${user._id}`,
-        { userId: user._id, role: user.role },
+        `session:${ObjectIdToString(user._id)}`,
+        { userId: ObjectIdToString(user._id), role: user.role },
         7 * 24 * 60 * 60,
       );
     } catch (cacheError) {
       console.error(
-        `[googleAuth] Redis session cache failed for user ${user._id.toString()}:`,
+        `[googleAuth] Redis session cache failed for user ${ObjectIdToString(user._id)}:`,
         (cacheError as Error).message,
       );
     }
 
+    logAuditEvent({ action: 'auth.google.success', req, userId: ObjectIdToString(user._id), email: user.email });
     res.json({
       success: true,
       data: { user, token },
       message: "Google sign-in successful",
     });
   } catch (error) {
-    if (error instanceof OAuthVerificationError) {
-      throw error; // Let the error middleware handle it
-    }
-    next(error);
+    next(error); // OAuthVerificationError is operational — error middleware handles it correctly
   }
 };
