@@ -11,6 +11,7 @@ import adminRoutes from './routes/admin.routes';
 import { errorHandler } from './middlewares/error.middleware';
 import { notFound } from './middlewares/notFound.middleware';
 import { sentryRequestHandler } from './config/sentry';
+import { env, isDevelopment } from './config/env';
 
 const app: Application = express();
 
@@ -18,7 +19,44 @@ app.set('trust proxy', 1);
 
 app.use(sentryRequestHandler());
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        // Pure API — no content should load from our responses
+        defaultSrc: ["'none'"],
+
+        // Allow API calls back to self + frontend origin + Supabase storage
+        connectSrc: [
+          "'self'",
+          env.CLIENT_URL,
+          env.SUPABASE_URL,
+          // Allow ngrok tunnels in development
+          ...(isDevelopment ? ['*.ngrok-free.app', '*.ngrok.app'] : []),
+        ],
+
+        // Allow avatars/media served from Supabase storage
+        imgSrc: ["'self'", 'data:', env.SUPABASE_URL],
+
+        // No scripts, styles, frames, objects, or forms should ever
+        // load from this API server's responses
+        scriptSrc:     ["'none'"],
+        styleSrc:      ["'none'"],
+        frameSrc:      ["'none'"],
+        objectSrc:     ["'none'"],
+        formAction:    ["'none'"],
+        frameAncestors:["'none'"],
+
+        // Force HTTPS in production
+        ...(isDevelopment ? {} : { upgradeInsecureRequests: [] }),
+      },
+    },
+
+    // Already helmet defaults — stating explicitly for auditability
+    crossOriginEmbedderPolicy: false, // Would break Supabase media if true
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow media cross-origin reads
+  })
+);
 
 // CORS
 const allowedOrigins = [
