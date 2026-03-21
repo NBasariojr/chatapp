@@ -64,7 +64,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(({
     const filteredOptions = searchable && searchTerm
         ? options?.filter(option =>
             option?.label?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-            (option?.value && option?.value?.toString()?.toLowerCase()?.includes(searchTerm?.toLowerCase()))
+            option?.value?.toString()?.toLowerCase()?.includes(searchTerm?.toLowerCase())
         )
         : options;
 
