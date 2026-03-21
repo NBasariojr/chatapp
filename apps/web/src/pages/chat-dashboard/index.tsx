@@ -71,7 +71,7 @@ const saveRoomSystemEvents = (events: Record<string, SystemEvent[]>): void => {
 
 const ChatDashboard = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { user, token } = useSelector((state: RootState) => state.auth);
+  const { user } = useSelector((state: RootState) => state.auth);
   const { rooms, messages, activeRoomId } = useSelector(
     (state: RootState) => state.chat,
   );
