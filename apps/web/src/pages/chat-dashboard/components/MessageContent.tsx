@@ -63,7 +63,7 @@ const MessageContent = ({
         />
         <div className="flex items-center space-x-2">
           <Button size="xs" onClick={() => {
-            if (editContent.trim()) onEditMessage(editingId!, editContent.trim());
+            if (editContent.trim()) onEditMessage(editingId, editContent.trim());
             setEditingId(null);
           }}>Save</Button>
           <Button size="xs" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
