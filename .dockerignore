@@ -1,7 +1,16 @@
+# Dependencies
 **/node_modules
+
+# Build outputs
 **/dist
+
+# Environment files
 **/.env
 **/.env.*
 !**/.env.example
+
+# Version control
 **/.git
+
+# Test coverage
 **/coverage

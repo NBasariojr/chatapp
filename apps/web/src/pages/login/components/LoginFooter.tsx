@@ -5,7 +5,6 @@ interface LoginFooterProps {
 }
 
 const LoginFooter = ({ onNavigateToRegister }: LoginFooterProps) => {
-  const currentYear = new Date().getFullYear();
 
   return (
     <div className="space-y-4">
