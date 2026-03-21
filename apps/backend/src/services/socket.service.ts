@@ -88,43 +88,59 @@ export const initSocketHandlers = (io: SocketServer): void => {
     });
 
     // Handle sending a message via socket
-    socket.on('message:send', async (payload: { roomId: string; content: string; type?: string }) => {
-      try {
-        const { roomId, content, type = 'text' } = payload;
+    socket.on(
+      'message:send',
+      async (
+        payload: { roomId: string; content: string; type?: string; replyTo?: string },
+        ack?: (res: { success: boolean; message?: unknown; error?: string }) => void,
+      ) => {
+        try {
+          const { roomId, content, type = 'text', replyTo } = payload;
 
-        if (!content || content.trim().length === 0) return;
-        if (content.length > 5000) return;
+          if (!content || content.trim().length === 0) {
+            ack?.({ success: false, error: 'Message content is empty' });
+            return;
+          }
+          if (content.length > 5000) {
+            ack?.({ success: false, error: 'Message exceeds maximum length' });
+            return;
+          }
 
-        // Verify participant
-        const room = await Room.findOne({ _id: roomId, participants: userId });
-        if (!room) return;
+          // Verify participant
+          const room = await Room.findOne({ _id: roomId, participants: userId });
+          if (!room) {
+            ack?.({ success: false, error: 'Room not found or access denied' });
+            return;
+          }
 
-        const message = await Message.create({
-          content: content.trim(),
-          type,
-          sender: userId,
-          roomId,
-        });
+          const message = await Message.create({
+            content: content.trim(),
+            type,
+            sender: userId,
+            roomId,
+            ...(replyTo ? { replyTo } : {}),
+          });
 
-        await message.populate('sender', 'username avatar isOnline');
+          await message.populate('sender', 'username avatar isOnline');
 
-        // Update room's last message
-        await Room.findByIdAndUpdate(roomId, { lastMessage: message._id });
+          await Room.findByIdAndUpdate(roomId, { lastMessage: message._id });
 
-        // Invalidate cache
-        await cacheDel(`messages:${roomId}:page1`);
+          await cacheDel(`messages:${roomId}:page1`);
 
-        // Broadcast to all participants in the room
-        io.to(roomId).emit('message:received', message);
-      } catch (error) {
-        captureException(error, {
-          userId: socket.userId,
-          roomId: payload.roomId,
-          event: 'message:send',
-        });
-        socket.emit('error', { message: 'Failed to send message' });
-      }
-    });
+          io.to(roomId).emit('message:received', message);
+
+          ack?.({ success: true, message });
+        } catch (error) {
+          captureException(error, {
+            userId: socket.userId,
+            roomId: payload.roomId,
+            event: 'message:send',
+          });
+          ack?.({ success: false, error: 'Failed to send message' });
+          socket.emit('error', { message: 'Failed to send message' });
+        }
+      },
+    );
 
     // Handle typing indicators
     socket.on('user:typing', ({ roomId }: { roomId: string }) => {

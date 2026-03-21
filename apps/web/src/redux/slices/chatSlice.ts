@@ -11,6 +11,7 @@ export interface ChatState {
   typingUsers: Record<string, string[]>;
   isLoading: boolean;
   error: string | null;
+  pendingMessages: Record<string, string>;
 }
 
 const initialState: ChatState = {
@@ -21,6 +22,7 @@ const initialState: ChatState = {
   typingUsers: {},
   isLoading: false,
   error: null,
+  pendingMessages: {},
 };
 
 export const fetchRooms = createAsyncThunk(
@@ -76,7 +78,6 @@ const chatSlice = createSlice({
       if (room) room.lastMessage = message;
     },
 
-    // ← ADDED: called by socket.service when message:deleted fires
     removeMessage(
       state,
       action: PayloadAction<{ roomId: string; messageId: string }>,
@@ -93,7 +94,6 @@ const chatSlice = createSlice({
       }
     },
 
-    // ← ADDED: called by socket.service when message:updated fires
     updateMessage(
       state,
       action: PayloadAction<{ roomId: string; messageId: string; content: string }>,
@@ -137,6 +137,52 @@ const chatSlice = createSlice({
         if (participant) participant.isOnline = isOnline;
       });
     },
+
+    addOptimisticMessage(
+      state,
+      action: PayloadAction<{ roomId: string; message: Message; tempId: string }>,
+    ) {
+      const { roomId, message, tempId } = action.payload;
+      if (!state.messages[roomId]) state.messages[roomId] = [];
+      state.messages[roomId].push(message);
+      state.pendingMessages[tempId] = roomId;
+    },
+
+    confirmMessage(
+      state,
+      action: PayloadAction<{ tempId: string; message: Message }>,
+    ) {
+      const { tempId, message } = action.payload;
+      const roomId = state.pendingMessages[tempId];
+      if (!roomId || !state.messages[roomId]) return;
+
+      state.messages[roomId] = state.messages[roomId].filter(
+        (m) => m._id !== tempId,
+      );
+
+      const alreadyExists = state.messages[roomId].some(
+        (m) => m._id === message._id,
+      );
+      if (!alreadyExists) {
+        state.messages[roomId].push(message);
+      }
+
+      const room = state.rooms.find((r) => r._id === roomId);
+      if (room) room.lastMessage = message;
+
+      delete state.pendingMessages[tempId];
+    },
+
+    rejectMessage(state, action: PayloadAction<{ tempId: string }>) {
+      const { tempId } = action.payload;
+      const roomId = state.pendingMessages[tempId];
+      if (!roomId || !state.messages[roomId]) return;
+
+      state.messages[roomId] = state.messages[roomId].filter(
+        (m) => m._id !== tempId,
+      );
+      delete state.pendingMessages[tempId];
+    },
   },
 
   extraReducers: (builder) => {
@@ -154,10 +200,13 @@ const chatSlice = createSlice({
 export const {
   setActiveRoom,
   addMessage,
-  removeMessage,    // ← ADDED
-  updateMessage,    // ← ADDED
+  removeMessage,
+  updateMessage,
   setTyping,
   updateUserStatus,
+  addOptimisticMessage,
+  confirmMessage,
+  rejectMessage,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;
