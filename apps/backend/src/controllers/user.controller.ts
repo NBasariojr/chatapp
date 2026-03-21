@@ -2,20 +2,19 @@ import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { User } from '../models/user.model';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { BadRequestError, NotFoundError, ConflictError } from '../utils/errors';
 
 // Search users by username
 export const searchUsers = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { q } = req.query;
     if (!q || typeof q !== 'string') {
-      res.status(400).json({ success: false, message: 'Search query required' });
-      return;
+      throw new BadRequestError('Search query required');
     }
 
     const currentUser = await User.findById(req.user?._id);
     if (!currentUser) {
-      res.status(404).json({ success: false, message: 'Current user not found' });
-      return;
+      throw new NotFoundError('Current user');
     }
 
     const users = await User.find({
@@ -69,8 +68,7 @@ export const getFriends = async (req: AuthRequest, res: Response, next: NextFunc
       .populate('friends', 'username avatar isOnline lastSeen');
 
     if (!currentUser) {
-      res.status(404).json({ success: false, message: 'User not found' });
-      return;
+      throw new NotFoundError('User');
     }
 
     res.json({ success: true, data: currentUser.friends });
@@ -86,8 +84,7 @@ export const getFriendRequests = async (req: AuthRequest, res: Response, next: N
       .populate('friendRequestsReceived', 'username avatar isOnline lastSeen');
 
     if (!currentUser) {
-      res.status(404).json({ success: false, message: 'User not found' });
-      return;
+      throw new NotFoundError('User');
     }
 
     res.json({ success: true, data: currentUser.friendRequestsReceived });
@@ -102,42 +99,35 @@ export const sendFriendRequest = async (req: AuthRequest, res: Response, next: N
     const { userId } = req.body;
 
     if (!userId) {
-      res.status(400).json({ success: false, message: 'User ID is required' });
-      return;
+      throw new BadRequestError('User ID is required');
     }
 
     if (userId === req.user?._id?.toString()) {
-      res.status(400).json({ success: false, message: 'Cannot send friend request to yourself' });
-      return;
+      throw new BadRequestError('Cannot send friend request to yourself');
     }
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
     const targetUser = await User.findById(userId);
     if (!targetUser) {
-      res.status(404).json({ success: false, message: 'User not found' });
-      return;
+      throw new NotFoundError('User');
     }
 
     const currentUser = await User.findById(req.user?._id);
     if (!currentUser) {
-      res.status(404).json({ success: false, message: 'Current user not found' });
-      return;
+      throw new NotFoundError('Current user');
     }
 
     if (currentUser.friends?.includes(userObjectId)) {
-      res.status(400).json({ success: false, message: 'Already friends with this user' });
-      return;
+      throw new ConflictError('Already friends with this user');
     }
 
     if (currentUser.friendRequestsSent?.includes(userObjectId)) {
-      res.status(400).json({ success: false, message: 'Friend request already sent' });
-      return;
+      throw new ConflictError('Friend request already sent');
     }
 
     if (currentUser.friendRequestsReceived?.includes(userObjectId)) {
-      res.status(400).json({ success: false, message: 'Friend request already received from this user' });
-      return;
+      throw new ConflictError('Friend request already received from this user');
     }
 
     await User.findByIdAndUpdate(req.user?._id, {
@@ -160,21 +150,18 @@ export const acceptFriendRequest = async (req: AuthRequest, res: Response, next:
     const { userId } = req.body;
 
     if (!userId) {
-      res.status(400).json({ success: false, message: 'User ID is required' });
-      return;
+      throw new BadRequestError('User ID is required');
     }
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
     const currentUser = await User.findById(req.user?._id);
     if (!currentUser) {
-      res.status(404).json({ success: false, message: 'Current user not found' });
-      return;
+      throw new NotFoundError('Current user');
     }
 
     if (!currentUser.friendRequestsReceived?.includes(userObjectId)) {
-      res.status(400).json({ success: false, message: 'No friend request from this user' });
-      return;
+      throw new BadRequestError('No friend request from this user');
     }
 
     await User.findByIdAndUpdate(req.user?._id, {
@@ -199,16 +186,14 @@ export const rejectFriendRequest = async (req: AuthRequest, res: Response, next:
     const { userId } = req.body;
 
     if (!userId) {
-      res.status(400).json({ success: false, message: 'User ID is required' });
-      return;
+      throw new BadRequestError('User ID is required');
     }
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
     const currentUser = await User.findById(req.user?._id);
     if (!currentUser) {
-      res.status(404).json({ success: false, message: 'Current user not found' });
-      return;
+      throw new NotFoundError('Current user');
     }
 
     await User.findByIdAndUpdate(req.user?._id, {
@@ -233,13 +218,11 @@ export const removeFriend = async (req: AuthRequest, res: Response, next: NextFu
 
     const currentUser = await User.findById(req.user?._id);
     if (!currentUser) {
-      res.status(404).json({ success: false, message: 'Current user not found' });
-      return;
+      throw new NotFoundError('Current user');
     }
 
     if (!currentUser.friends?.includes(userObjectId)) {
-      res.status(400).json({ success: false, message: 'Not friends with this user' });
-      return;
+      throw new BadRequestError('Not friends with this user');
     }
 
     await User.findByIdAndUpdate(req.user?._id, {
@@ -261,8 +244,7 @@ export const getUserById = async (req: AuthRequest, res: Response, next: NextFun
   try {
     const user = await User.findById(req.params.userId).select('-__v');
     if (!user) {
-      res.status(404).json({ success: false, message: 'User not found' });
-      return;
+      throw new NotFoundError('User');
     }
     res.json({ success: true, data: user });
   } catch (error) {

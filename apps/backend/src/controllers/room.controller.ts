@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { Room } from '../models/room.model';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { NotFoundError } from '../utils/errors';
 
 // Get all rooms for current user
 export const getRooms = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -67,8 +68,7 @@ export const getRoomById = async (req: AuthRequest, res: Response, next: NextFun
       .populate('lastMessage');
 
     if (!room) {
-      res.status(404).json({ success: false, message: 'Room not found' });
-      return;
+      throw new NotFoundError('Room');
     }
 
     res.json({ success: true, data: room });

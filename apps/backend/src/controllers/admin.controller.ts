@@ -3,6 +3,7 @@ import { User } from '../models/user.model';
 import { Room } from '../models/room.model';
 import { Message } from '../models/message.model';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { BadRequestError, NotFoundError } from '../utils/errors';
 
 // Get platform statistics
 export const getStats = async (_req: AuthRequest, res: Response, next: NextFunction) => {
@@ -47,8 +48,7 @@ export const updateUserRole = async (req: AuthRequest, res: Response, next: Next
     const validRoles = ['user', 'moderator', 'admin'];
 
     if (!validRoles.includes(role)) {
-      res.status(400).json({ success: false, message: 'Invalid role' });
-      return;
+      throw new BadRequestError('Invalid role');
     }
 
     const user = await User.findByIdAndUpdate(
@@ -58,8 +58,7 @@ export const updateUserRole = async (req: AuthRequest, res: Response, next: Next
     );
 
     if (!user) {
-      res.status(404).json({ success: false, message: 'User not found' });
-      return;
+      throw new NotFoundError('User');
     }
 
     res.json({ success: true, data: user, message: 'Role updated' });
@@ -73,14 +72,12 @@ export const deleteUser = async (req: AuthRequest, res: Response, next: NextFunc
   try {
     // Prevent self-deletion
     if (req.params.userId === req.user?._id?.toString()) {
-      res.status(400).json({ success: false, message: 'Cannot delete your own account' });
-      return;
+      throw new BadRequestError('Cannot delete your own account');
     }
 
     const user = await User.findByIdAndDelete(req.params.userId);
     if (!user) {
-      res.status(404).json({ success: false, message: 'User not found' });
-      return;
+      throw new NotFoundError('User');
     }
 
     res.json({ success: true, message: 'User removed' });

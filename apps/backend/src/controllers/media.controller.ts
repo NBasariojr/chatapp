@@ -1,18 +1,17 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { uploadMedia } from '../services/media.service';
+import { BadRequestError, UnauthorizedError } from '../utils/errors';
 
 // Upload file to Supabase storage
 export const uploadFile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.file) {
-      res.status(400).json({ success: false, message: 'No file uploaded' });
-      return;
+      throw new BadRequestError('No file uploaded');
     }
 
     if (!req.user) {
-      res.status(401).json({ success: false, message: 'User not authenticated' });
-      return;
+      throw new UnauthorizedError('User not authenticated');
     }
 
     const result = await uploadMedia(req.file, req.user._id);
