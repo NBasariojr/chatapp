@@ -6,6 +6,7 @@ import { Message } from '../models/message.model';
 import { Room } from '../models/room.model';
 import { cacheSet, cacheDel } from '../config/redis';
 import { captureException } from '../config/sentry';
+import { ObjectIdToString } from '../utils/objectId';
 
 interface AuthSocket extends Socket {
   userId?: string;
@@ -30,7 +31,7 @@ const authenticateSocket = async (socket: AuthSocket, next: (err?: Error) => voi
 
     if (!user) return next(new Error('User not found'));
 
-    socket.userId = user._id.toString();
+    socket.userId = ObjectIdToString(user._id);
     socket.userRole = user.role;
     next();
   } catch (err) {
@@ -57,7 +58,7 @@ export const initSocketHandlers = (io: SocketServer): void => {
     // Join user to their rooms
     const rooms = await Room.find({ participants: userId }).select('_id');
     rooms.forEach((room) => {
-      socket.join(room._id.toString());
+      socket.join(ObjectIdToString(room._id));
     });
 
     // Handle joining a specific room
