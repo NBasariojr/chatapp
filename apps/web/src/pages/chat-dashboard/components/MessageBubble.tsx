@@ -58,6 +58,72 @@ const THEMED_RECEIVED_BUBBLE_STYLE: React.CSSProperties = {
   borderColor: "transparent",
 };
 
+// ─── Delivery status indicator ────────────────────────────────────────────────
+//
+// Four states driven by message.id and message.status:
+//
+//  pending   → id starts with "temp_" (optimistic, not yet ack'd by server)
+//              Clock icon — muted — "still sending"
+//
+//  sent      → ack received, status = 'sent'
+//              Single Check — muted — "server has it"
+//
+//  delivered → status = 'delivered'
+//              Double Check — muted — "reached the room"
+//
+//  read      → status = 'read'
+//              Double Check — primary color — "recipient has seen it"
+//
+const DeliveryStatus = ({
+  message,
+}: {
+  message: Pick<Message, 'id' | 'status'>;
+}) => {
+  // Optimistic placeholder — ack not yet received
+  if (message.id.startsWith('temp_')) {
+    return (
+      <Icon
+        name="Clock"
+        size={12}
+        className="text-muted-foreground opacity-60"
+        aria-label="Sending"
+      />
+    );
+  }
+
+  if (message.status === 'read') {
+    return (
+      <Icon
+        name="CheckCheck"
+        size={12}
+        className="text-primary"
+        aria-label="Read"
+      />
+    );
+  }
+
+  if (message.status === 'delivered') {
+    return (
+      <Icon
+        name="CheckCheck"
+        size={12}
+        className="text-muted-foreground"
+        aria-label="Delivered"
+      />
+    );
+  }
+
+  // Default: 'sent' — confirmed by server ack
+  return (
+    <Icon
+      name="Check"
+      size={12}
+      className="text-muted-foreground"
+      aria-label="Sent"
+    />
+  );
+};
+
 const MessageBubble = ({
   message,
   currentUser,
@@ -110,7 +176,7 @@ const MessageBubble = ({
 
   return (
     <button
-      className={`flex ${isMe ? "justify-end" : "justify-start"} group`}
+      className={`flex w-full items-start ${isMe ? "justify-end" : "justify-start"}`}
       onClick={() => { if (isConfirmingDelete) setConfirmDeleteId(null); }}
       aria-label={isConfirmingDelete ? "Cancel delete confirmation" : "Message bubble"}
     >
@@ -129,7 +195,7 @@ const MessageBubble = ({
         )}
         {!showAvatar && !isMe && <div className="w-8 mr-2" />}
 
-        <div className={`relative ${isMe ? "mr-2" : ""}`}>
+        <div className={`relative group ${isMe ? "mr-2" : ""}`}>
           <div
             className={`px-4 py-2 rounded-2xl ${
               isMe
@@ -165,15 +231,9 @@ const MessageBubble = ({
             onDeleteMessage={onDeleteMessage}
           />
 
-          <div className={`flex items-center space-x-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}>
-            <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
-            {isMe && (
-              <Icon
-                name={message.status === "read" ? "CheckCheck" : "Check"}
-                size={12}
-                className={message.status === "read" ? "text-primary" : "text-muted-foreground"}
-              />
-            )}
+          <div className={`flex items-center space-x-1 mt-1 whitespace-nowrap ${isMe ? "justify-end" : "justify-start"}`}>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">{formatTime(message.timestamp)}</span>
+            {isMe && <DeliveryStatus message={message} />}
           </div>
         </div>
       </div>
