@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/user.model';
 import { setSentryUser } from '../config/sentry';
+import { logAuditEvent } from '../services/audit.service';
+import { ObjectIdToString } from '../utils/objectId';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -46,12 +48,13 @@ export const authenticate = async (
       }
     }
 
-    req.user = { _id: user._id.toString(), role: user.role };
+    req.user = { _id: ObjectIdToString(user._id), role: user.role };
     // Set Sentry user context for error tracking
-    setSentryUser({ id: user._id.toString(), role: user.role });
+    setSentryUser({ id: ObjectIdToString(user._id), role: user.role });
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
+      logAuditEvent({ action: 'auth.token.invalid', req, metadata: { error: error.message } });
       res.status(401).json({ success: false, message: 'Invalid or expired token' });
       return;
     }
