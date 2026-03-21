@@ -1,8 +1,8 @@
 // backend/src/routes/media.routes.ts
-import { Router, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import multer from 'multer';
-import { authenticate, AuthRequest } from '../middlewares/auth.middleware';
-import { uploadMedia } from '../services/media.service';
+import { uploadFile } from '../controllers/media.controller';
+import { authenticate } from '../middlewares/auth.middleware';
 
 const router: Router = Router();
 
@@ -22,23 +22,6 @@ const upload = multer({
   },
 });
 
-router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    if (!req.file) {
-      res.status(400).json({ success: false, message: 'No file uploaded' });
-      return;
-    }
-
-    const result = await uploadMedia(req.file, req.user!._id);
-
-    res.status(201).json({
-      success: true,
-      data: result,
-      message: 'File uploaded successfully',
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+router.post('/upload', authenticate, upload.single('file'), uploadFile);
 
 export default router;
