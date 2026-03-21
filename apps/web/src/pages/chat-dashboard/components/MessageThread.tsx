@@ -200,12 +200,12 @@ const MessageThread = ({
 
   const canEdit = (msg: Message) => {
     const mins = (Date.now() - new Date(msg.timestamp).getTime()) / 60000;
-    return msg.sender.id === currentUser.id && mins <= 15 && msg.type === 'text';
+    return String(msg.sender.id) === String(currentUser.id) && mins <= 15 && msg.type === 'text';
   };
 
   const canDelete = (msg: Message) => {
     const hours = (Date.now() - new Date(msg.timestamp).getTime()) / 3600000;
-    return msg.sender.id === currentUser.id && hours <= 24;
+    return String(msg.sender.id) === String(currentUser.id) && hours <= 24;
   };
 
   const handleSendMessage = (data: MessageData) => {
@@ -324,7 +324,7 @@ const MessageThread = ({
 
               // Regular message
               const message = item.data;
-              const isMe = message.sender.id === currentUser.id;
+              const isMe = String(message.sender.id) === String(currentUser.id);
 
               const prevMessageItem = dayItems
                 .slice(0, index)
