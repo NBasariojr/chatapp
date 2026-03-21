@@ -6,6 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="google-signin-client_id" content="%VITE_GOOGLE_CLIENT_ID%" />
     <title>ChatApp</title>
+
+    <!-- Preconnect to backend — eliminates DNS + TCP latency on first API call -->
+    <link rel="preconnect" href="%VITE_API_URL%" crossorigin />
+
+    <!-- dns-prefetch as fallback for browsers that don't support preconnect -->
+    <link rel="dns-prefetch" href="%VITE_API_URL%" />
   </head>
   <body>
     <div id="root"></div>
