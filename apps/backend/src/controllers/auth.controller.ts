@@ -10,7 +10,7 @@ import {
   exchangeAndVerifyGoogleCode,
   upsertGoogleUser,
 } from "../services/oauth.service";
-import { OAuthVerificationError } from "../utils/errors";
+import { OAuthVerificationError, ValidationError, ConflictError, NotFoundError, UnauthorizedError } from "../utils/errors";
 import { config, jwt } from "../config";
 
 // Schemas
@@ -84,22 +84,16 @@ export const register = async (
   try {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({ success: false, message: parsed.error.errors[0].message });
-      return;
+      throw new ValidationError(parsed.error.errors[0].message);
     }
     const { username, email, password } = parsed.data;
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
-      res.status(409).json({
-        success: false,
-        message:
-          existingUser.email === email
-            ? "Email already in use"
-            : "Username already taken",
-      });
-      return;
+      throw new ConflictError(
+        existingUser.email === email
+          ? "Email already in use"
+          : "Username already taken"
+      );
     }
     const user = await User.create({ username, email, password });
     const token = generateToken(
@@ -130,37 +124,25 @@ export const login = async (
   try {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({ success: false, message: "Invalid email or password format" });
-      return;
+      throw new ValidationError("Invalid email or password format");
     }
     const { email, password } = parsed.data;
 
     const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
-      res
-        .status(401)
-        .json({ success: false, message: "Invalid email or password" });
-      return;
+      throw new UnauthorizedError("Invalid email or password");
     }
 
     // Google-only account: no password set — give actionable message
     if (user.authProvider === "google" && !user.password) {
-      res.status(401).json({
-        success: false,
-        message:
-          "This account uses Google Sign-In. Please continue with Google.",
-      });
-      return;
+      throw new UnauthorizedError(
+        "This account uses Google Sign-In. Please continue with Google."
+      );
     }
 
     if (!(await user.comparePassword(password))) {
-      res
-        .status(401)
-        .json({ success: false, message: "Invalid email or password" });
-      return;
+      throw new UnauthorizedError("Invalid email or password");
     }
 
     const token = generateToken(
@@ -215,8 +197,7 @@ export const getMe = async (
   try {
     const user = await User.findById(req.user?._id);
     if (!user) {
-      res.status(404).json({ success: false, message: "User not found" });
-      return;
+      throw new NotFoundError("User");
     }
     res.json({ success: true, data: user });
   } catch (error) {
@@ -234,10 +215,7 @@ export const forgotPassword = async (
   try {
     const parsed = forgotPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({ success: false, message: parsed.error.errors[0].message });
-      return;
+      throw new ValidationError(parsed.error.errors[0].message);
     }
 
     const { email } = parsed.data;
@@ -270,11 +248,7 @@ export const forgotPassword = async (
         $unset: { passwordResetToken: "", passwordResetExpires: "" },
       });
       console.error("[forgotPassword] Email send error:", emailError);
-      res.status(500).json({
-        success: false,
-        message: "Failed to send reset email. Please try again.",
-      });
-      return;
+      throw new Error("Failed to send reset email. Please try again.");
     }
 
     res.json(GENERIC_RESET_RESPONSE);
@@ -291,12 +265,7 @@ export const validateResetToken = async (
   try {
     const parsed = tokenParamsSchema.safeParse(req.params);
     if (!parsed.success) {
-      res.status(400).json({
-        success: false,
-        data: { valid: false },
-        message: "Invalid token format",
-      });
-      return;
+      throw new ValidationError("Invalid token format");
     }
 
     const hashedToken = hashToken(parsed.data.token);
@@ -307,12 +276,7 @@ export const validateResetToken = async (
     }).select("_id");
 
     if (!user) {
-      res.status(400).json({
-        success: false,
-        data: { valid: false },
-        message: "Token is invalid or has expired.",
-      });
-      return;
+      throw new ValidationError("Token is invalid or has expired.");
     }
 
     res.json({ success: true, data: { valid: true } });
@@ -329,18 +293,12 @@ export const resetPassword = async (
   try {
     const paramsResult = tokenParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-      res
-        .status(400)
-        .json({ success: false, message: "Invalid or missing token" });
-      return;
+      throw new ValidationError("Invalid or missing token");
     }
 
     const bodyResult = resetPasswordSchema.safeParse(req.body);
     if (!bodyResult.success) {
-      res
-        .status(400)
-        .json({ success: false, message: bodyResult.error.errors[0].message });
-      return;
+      throw new ValidationError(bodyResult.error.errors[0].message);
     }
 
     const { token } = paramsResult.data;
@@ -353,10 +311,7 @@ export const resetPassword = async (
     }).select("_id");
 
     if (!user) {
-      res
-        .status(400)
-        .json({ success: false, message: "Token is invalid or has expired." });
-      return;
+      throw new ValidationError("Token is invalid or has expired.");
     }
 
     const salt = await bcrypt.genSalt(12);
@@ -402,10 +357,7 @@ export const googleAuth = async (
   try {
     const parsed = googleAuthSchema.safeParse(req.body);
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({ success: false, message: parsed.error.errors[0].message });
-      return;
+      throw new ValidationError(parsed.error.errors[0].message);
     }
 
     const { code } = parsed.data;
@@ -440,8 +392,7 @@ export const googleAuth = async (
     });
   } catch (error) {
     if (error instanceof OAuthVerificationError) {
-      res.status(401).json({ success: false, message: error.message });
-      return;
+      throw error; // Let the error middleware handle it
     }
     next(error);
   }

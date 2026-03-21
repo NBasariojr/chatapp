@@ -6,6 +6,7 @@ import { Room } from "../models/room.model";
 import { cacheGet, cacheSet, cacheDel } from "../config/redis";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { getIO } from '../config/socket';
+import { ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
 
 const sendMessageSchema = z.object({
   content: z.string().min(1).max(5000),
@@ -34,10 +35,7 @@ export const getMessages = async (
       participants: req.user?._id,
     });
     if (!room) {
-      res
-        .status(403)
-        .json({ success: false, message: "Access denied to this room" });
-      return;
+      throw new ForbiddenError("Access denied to this room");
     }
 
     // Try cache first (only for page 1)
@@ -84,14 +82,12 @@ export const sendMessage = async (
     const { roomId } = req.params;
     const parsed = sendMessageSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ success: false, message: parsed.error.errors[0].message });
-      return;
+      throw new ValidationError(parsed.error.errors[0].message);
     }
 
     const room = await Room.findOne({ _id: roomId, participants: req.user?._id });
     if (!room) {
-      res.status(403).json({ success: false, message: "Access denied to this room" });
-      return;
+      throw new ForbiddenError("Access denied to this room");
     }
 
     const message = await Message.create({
@@ -133,27 +129,23 @@ export const editMessage = async (
 
     const parsed = editMessageSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ success: false, message: parsed.error.errors[0].message });
-      return;
+      throw new ValidationError(parsed.error.errors[0].message);
     }
 
     const message = await Message.findById(messageId).populate("sender", "username avatar isOnline");
     if (!message) {
-      res.status(404).json({ success: false, message: "Message not found" });
-      return;
+      throw new NotFoundError("Message");
     }
 
     // Only the sender can edit — admins cannot edit others' messages
     if (!message.sender._id.equals(req.user?._id)) {
-      res.status(403).json({ success: false, message: "Not authorized to edit this message" });
-      return;
+      throw new ForbiddenError("Not authorized to edit this message");
     }
 
     // Enforce the 15-minute edit window — matches the frontend canEdit() guard
     const ageInMinutes = (Date.now() - message.createdAt.getTime()) / 60000;
     if (ageInMinutes > 15) {
-      res.status(403).json({ success: false, message: "Message can no longer be edited" });
-      return;
+      throw new ForbiddenError("Message can no longer be edited");
     }
 
     message.content = parsed.data.content;
@@ -188,8 +180,7 @@ export const deleteMessage = async (
     const message = await Message.findById(messageId);
 
     if (!message) {
-      res.status(404).json({ success: false, message: "Message not found" });
-      return;
+      throw new NotFoundError("Message");
     }
 
     // Sender can delete within 24h; admin can delete any message at any time
@@ -197,23 +188,20 @@ export const deleteMessage = async (
     const isAdmin = req.user?.role === "admin";
     
     if (!isSender && !isAdmin) {
-      res.status(403).json({ success: false, message: "Not authorized to delete this message" });
-      return;
+      throw new ForbiddenError("Not authorized to delete this message");
     }
 
     // Enforce 24-hour window for non-admin senders
     if (isSender && !isAdmin) {
       const ageInHours = (Date.now() - message.createdAt.getTime()) / (1000 * 60 * 60);
       if (ageInHours > 24) {
-        res.status(403).json({ success: false, message: "Not authorized to delete this message" });
-        return;
+        throw new ForbiddenError("Not authorized to delete this message");
       }
     }
 
     const roomId = message.roomId?.toString();
     if (!roomId) {
-      res.status(500).json({ success: false, message: "Invalid room ID" });
-      return;
+      throw new Error("Invalid room ID");
     }
 
     await message.deleteOne();
