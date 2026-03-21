@@ -1,6 +1,7 @@
 // web/src/pages/chat-dashboard/components/MessageThread.tsx
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import type { AppDispatch, RootState } from "../../../redux/store";
 import Icon from "components/AppIcon";
 import AppImage from "../../../components/AppImage";
 import Button from "../../../components/ui/Button";
@@ -8,7 +9,7 @@ import ProfileView from "./ProfileView";
 import MessageInput from "./MessageInput";
 import SystemEventPill from "./SystemEventPill";
 import MessageBubble from "./MessageBubble";
-import { setActiveRoom } from "../../../redux/slices/chatSlice";
+import { setActiveRoom, fetchMessages } from "../../../redux/slices/chatSlice";
 import type { ReplyPreview } from "@chatapp/shared";
 import type { Theme } from "./ThemeModal";
 import type { SystemEvent } from "../types";
@@ -159,18 +160,23 @@ const MessageThread = ({
   const [editContent, setEditContent]         = useState("");
   const [replyingTo, setReplyingTo]           = useState<ReplyContext | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [isMobile, setIsMobile]               = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile]               = useState(globalThis.window.innerWidth < 768);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const dispatch  = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
+
+  const { hasMore, isLoadingMore, messages: allMessages } = useSelector(
+    (state: RootState) => state.chat,
+  );
+  const activeHasMore = conversation ? (hasMore[conversation.id] ?? false) : false;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, systemEvents]);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const handleResize = () => setIsMobile(globalThis.window.innerWidth < 768);
+    globalThis.window.addEventListener("resize", handleResize);
+    return () => globalThis.window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -214,6 +220,19 @@ const MessageThread = ({
       ...(replyingTo && { replyTo: replyingTo.messageId }),
     });
     setReplyingTo(null);
+  };
+
+  const handleLoadMore = () => {
+    if (!conversation || isLoadingMore || !activeHasMore) return;
+    const roomMessages = allMessages[conversation.id] ?? [];
+    if (roomMessages.length === 0) return;
+
+    // Cursor = createdAt of the oldest message currently loaded
+    const oldest = roomMessages[0];
+    dispatch(fetchMessages({
+      roomId: conversation.id,
+      before: new Date(oldest.createdAt).toISOString(),
+    }));
   };
 
   const threadBg       = theme?.background     || undefined;
@@ -291,6 +310,30 @@ const MessageThread = ({
         className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 transition-all duration-300"
         style={threadBg ? { background: threadBg } : undefined}
       >
+        {/* Load older messages */}
+        {activeHasMore && (
+          <div className="flex justify-center py-2">
+            <button
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="flex items-center gap-2 px-4 py-1.5 text-xs text-muted-foreground
+                         bg-muted hover:bg-accent rounded-full transition-colors disabled:opacity-50"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Icon name="Loader2" size={12} className="animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <Icon name="ChevronUp" size={12} />
+                  Load older messages
+                </>
+              )}
+            </button>
+          </div>
+        )}
+        
         {Object.entries(timeline).map(([dateKey, dayItems]) => (
           <div key={dateKey}>
 

@@ -59,8 +59,13 @@ export const chatService = {
     return res.data.data;
   },
 
-  getMessages: async (roomId: string, page = 1): Promise<{ messages: Message[] }> => {
-    const res = await client.get(`/api/messages/${roomId}`, { params: { page } });
+  getMessages: async (
+    roomId: string,
+    options: { before?: string } = {},
+  ): Promise<{ messages: Message[]; hasMore: boolean }> => {
+    const res = await client.get(`/api/messages/${roomId}`, {
+      params: options.before ? { before: options.before } : undefined,
+    });
     return res.data.data;
   },
 
