@@ -30,9 +30,20 @@ export const searchUsers = async (req: AuthRequest, res: Response, next: NextFun
       const requestSent = currentUser.friendRequestsSent?.includes(user._id);
       const requestReceived = currentUser.friendRequestsReceived?.includes(user._id);
 
+      let friendshipStatus: string;
+      if (isFriend) {
+        friendshipStatus = 'friends';
+      } else if (requestSent) {
+        friendshipStatus = 'request_sent';
+      } else if (requestReceived) {
+        friendshipStatus = 'request_received';
+      } else {
+        friendshipStatus = 'none';
+      }
+
       return {
         ...userObj,
-        friendshipStatus: isFriend ? 'friends' : requestSent ? 'request_sent' : requestReceived ? 'request_received' : 'none',
+        friendshipStatus,
       };
     });
 
@@ -45,9 +56,9 @@ export const searchUsers = async (req: AuthRequest, res: Response, next: NextFun
 // Update profile
 export const updateProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const allowedFields = ['username', 'avatar'];
+    const allowedFields = new Set(['username', 'avatar']);
     const updates = Object.fromEntries(
-      Object.entries(req.body).filter(([key]) => allowedFields.includes(key))
+      Object.entries(req.body).filter(([key]) => allowedFields.has(key))
     );
 
     const user = await User.findByIdAndUpdate(req.user?._id, updates, {
