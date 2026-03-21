@@ -12,6 +12,7 @@ import { errorHandler } from './middlewares/error.middleware';
 import { notFound } from './middlewares/notFound.middleware';
 import { sentryRequestHandler } from './config/sentry';
 import { env, isDevelopment } from './config/env';
+import { sanitizeBody } from './middlewares/sanitize.middleware';
 
 const app: Application = express();
 
@@ -92,8 +93,13 @@ app.use(
 );
 
 // Body Parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// JSON API endpoints never need 10mb — that limit is for media uploads (Supabase handles those).
+// 100kb covers the largest legitimate JSON payloads with room to spare.
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+
+// Sanitize all incoming body fields — strips HTML, blocks MongoDB operators and prototype keys
+app.use(sanitizeBody);
 
 // Rate Limiting
 app.use('/api/', globalLimiter);
