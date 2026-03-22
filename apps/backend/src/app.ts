@@ -1,7 +1,7 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { globalLimiter } from './config/rateLimiter';
+import { globalLimiter, messageLimiter } from './config/rateLimiter';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import roomRoutes from './routes/room.routes';
@@ -12,7 +12,7 @@ import { errorHandler } from './middlewares/error.middleware';
 import { notFound } from './middlewares/notFound.middleware';
 import { sentryRequestHandler } from './config/sentry';
 import { env, isDevelopment } from './config/env';
-import { sanitizeBody } from './middlewares/sanitize.middleware';
+import { sanitizeBody, sanitizeQuery } from './middlewares/sanitize.middleware';
 
 const app: Application = express();
 
@@ -59,9 +59,17 @@ app.use(
   })
 );
 
-// CORS
+// Extract the project-specific Vercel subdomain from CLIENT_URL.
+// e.g. CLIENT_URL = "https://chatapp-abc123.vercel.app"
+//      → vercelSubdomain = ".chatapp-abc123.vercel.app"
+// This blocks any other Vercel project from hitting your API.
+const clientHost = env.CLIENT_URL.replace(/^https?:\/\//, '');
+const vercelSubdomain = clientHost.endsWith('.vercel.app')
+  ? `.${clientHost}`       // preview deployments like chatapp-git-main-user.vercel.app
+  : null;
+
 const allowedOrigins = [
-  process.env.CLIENT_URL || 'http://localhost:3000',
+  env.CLIENT_URL,
   process.env.NGROK_URL,
   'http://localhost:3000',
   'http://localhost:5173',
@@ -75,13 +83,11 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       if (
-        allowedOrigins.some(
-          (o) =>
-            o === origin ||
-            origin.endsWith('.ngrok-free.app') ||
-            origin.endsWith('.ngrok.app') ||
-            origin.endsWith('.vercel.app')
-        )
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.ngrok-free.app') ||
+        origin.endsWith('.ngrok.app') ||
+        // Only allow YOUR Vercel project's preview deployments, not all of Vercel
+        (vercelSubdomain !== null && origin.endsWith(vercelSubdomain))
       ) {
         return callback(null, true);
       }
@@ -100,9 +106,12 @@ app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // Sanitize all incoming body fields — strips HTML, blocks MongoDB operators and prototype keys
 app.use(sanitizeBody);
+// Sanitize query parameters to prevent injection via URL
+app.use(sanitizeQuery);
 
 // Rate Limiting
 app.use('/api/', globalLimiter);
+app.use('/api/messages', messageLimiter);  // per-room spam control
 
 // Health Check
 app.get('/health', (_req, res) => {
