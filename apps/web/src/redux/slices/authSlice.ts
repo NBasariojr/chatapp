@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { AuthUser } from '@chatapp/shared';
 import { authService } from 'services/auth.service';
+import { setSentryUser, clearSentryUser } from '@/lib/sentry';
 
 type AsyncStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -120,6 +121,7 @@ const authSlice = createSlice({
       state.error = null;
       state.oauthError = null;
       localStorage.removeItem('chatapp_token');
+      clearSentryUser();
     },
     clearError(state) {
       state.error = null;
@@ -145,6 +147,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.user = action.payload;
         state.token = action.payload.token;
+        setSentryUser({ id: action.payload._id, role: action.payload.role });
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
@@ -160,6 +163,9 @@ const authSlice = createSlice({
       .addCase(fetchMe.fulfilled, (state, action) => {
         state.isLoading = false;
         state.user = state.token ? { ...action.payload, token: state.token } : null;
+        if (state.user) {
+          setSentryUser({ id: state.user._id, role: state.user.role });
+        }
       })
       .addCase(fetchMe.rejected, (state, action) => {
         state.isLoading = false;
@@ -176,6 +182,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.user = action.payload;
         state.token = action.payload.token;
+        setSentryUser({ id: action.payload._id, role: action.payload.role });
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -193,6 +200,7 @@ const authSlice = createSlice({
         state.oauthError = null;
         state.user = action.payload;
         state.token = action.payload.token;
+        setSentryUser({ id: action.payload._id, role: action.payload.role });
       })
       .addCase(googleLogin.rejected, (state, action) => {
         state.isOAuthLoading = false;
