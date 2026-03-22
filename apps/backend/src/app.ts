@@ -118,11 +118,6 @@ app.get('/health', (_req, res) => {
   res.json({ success: true, message: 'Server is running', timestamp: new Date().toISOString() });
 });
 
-// ⚠️ TEMPORARY — delete after Sentry test
-app.get('/debug-sentry', (_req, res) => {
-  throw new Error('Sentry integration test — delete me');
-});
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
