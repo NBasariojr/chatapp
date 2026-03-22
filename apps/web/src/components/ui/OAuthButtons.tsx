@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useDispatch, useSelector } from "react-redux";
 import { googleLogin } from "redux/slices/authSlice";
@@ -94,19 +94,27 @@ const OAuthButtons = ({
 
   const isDisabled = isLoading || isOAuthLoading;
 
-  const handleGoogleLogin = useGoogleLogin({
-    flow: "auth-code",
-    onSuccess: async (codeResponse) => {
+  const onSuccess = useCallback(
+    async (codeResponse: { code: string }) => {
       try {
         await dispatch(googleLogin(codeResponse.code)).unwrap();
         onOAuthLogin?.("google");
       } catch (error) {
         console.error("[Google OAuth] Login failed:", error);
+        // Error is stored in Redux state.auth.oauthError — already rendered below
       }
     },
-    onError: (errorResponse) => {
-      console.error("[Google OAuth] Sign-in flow error:", errorResponse);
-    },
+    [dispatch, onOAuthLogin],
+  );
+
+  const onError = useCallback((errorResponse: unknown) => {
+    console.error("[Google OAuth] Sign-in flow error:", errorResponse);
+  }, []);
+
+  const handleGoogleLogin = useGoogleLogin({
+    flow: "auth-code",
+    onSuccess,
+    onError,
   });
 
   return (
@@ -128,7 +136,7 @@ const OAuthButtons = ({
         {/* Google — fully wired */}
         <button
           type="button"
-          onClick={() => handleGoogleLogin()}
+          onClick={handleGoogleLogin}
           disabled={isDisabled}
           aria-label="Continue with Google"
           className={cn(

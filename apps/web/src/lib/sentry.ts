@@ -6,14 +6,14 @@
  *   import React from 'react'
  *   ...
  */
-import * as Sentry from '@sentry/react';
+import * as Sentry from "@sentry/react";
 import {
   createRoutesFromChildren,
   matchRoutes,
   useLocation,
   useNavigationType,
-} from 'react-router-dom';
-import { useEffect } from 'react';
+} from "react-router-dom";
+import { useEffect } from "react";
 
 const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 const environment = import.meta.env.MODE; // 'development' | 'production'
@@ -21,8 +21,8 @@ const release = import.meta.env.VITE_SENTRY_RELEASE as string | undefined;
 
 export function initSentry(): void {
   if (!dsn) {
-    if (environment === 'production') {
-      console.error('[Sentry] ⚠️ VITE_SENTRY_DSN missing in production build!');
+    if (environment === "production") {
+      console.error("[Sentry] ⚠️ VITE_SENTRY_DSN missing in production build!");
     }
     return;
   }
@@ -33,13 +33,13 @@ export function initSentry(): void {
     release: release ?? `chatapp-web@${APP_VERSION}`, // APP_VERSION injected by Vite
 
     // ─── Performance ───────────────────────────────────────────────────────
-    tracesSampleRate: environment === 'production' ? 0.1 : 0.0,
+    tracesSampleRate: environment === "production" ? 0.1 : 0.0,
 
     // ─── Session Replay ────────────────────────────────────────────────────
     // Records a video-like replay of user actions when an error occurs.
     // IMPORTANT: mask all text and block all media to avoid capturing PII.
-    replaysSessionSampleRate: 0.0,     // Don't record normal sessions
-    replaysOnErrorSampleRate: 1.0,     // Record 100% of sessions with errors
+    replaysSessionSampleRate: 0.0, // Don't record normal sessions
+    replaysOnErrorSampleRate: 1.0, // Record 100% of sessions with errors
 
     // ─── Integrations ──────────────────────────────────────────────────────
     integrations: [
@@ -53,22 +53,22 @@ export function initSentry(): void {
       }),
       // Session replay (requires @sentry/replay — already bundled in @sentry/react 7.x)
       new Sentry.Replay({
-        maskAllText: true,    // Mask all text content (PII protection)
-        blockAllMedia: true,  // Block images/video from replay
+        maskAllText: true, // Mask all text content (PII protection)
+        blockAllMedia: true, // Block images/video from replay
       }),
     ],
 
     // ─── Noise Reduction ───────────────────────────────────────────────────
     ignoreErrors: [
       // Non-error browser events
-      'ResizeObserver loop limit exceeded',
-      'ResizeObserver loop completed with undelivered notifications',
+      "ResizeObserver loop limit exceeded",
+      "ResizeObserver loop completed with undelivered notifications",
       // Network errors the user should see in UI, not Sentry
-      'Network Error',
-      'Failed to fetch',
-      'Load failed',
+      "Network Error",
+      "Failed to fetch",
+      "Load failed",
       // Expected auth errors
-      'Request failed with status code 401',
+      "Request failed with status code 401",
     ],
 
     // ─── Privacy ───────────────────────────────────────────────────────────
@@ -79,6 +79,10 @@ export function initSentry(): void {
       return event;
     },
   });
+
+  console.log(
+    `[Sentry] ✓ Initialized | env: ${environment} | release: ${release ?? "unknown"}`,
+  );
 }
 
 /**
@@ -112,10 +116,10 @@ export function addBreadcrumb(
   message: string,
   data?: Record<string, unknown>,
 ): void {
-  Sentry.addBreadcrumb({ category, message, data, level: 'info' });
+  Sentry.addBreadcrumb({ category, message, data, level: "info" });
 }
 
-export * as Sentry from '@sentry/react';
+export * as Sentry from "@sentry/react";
 
 // Injected by Vite define plugin (see vite.config.ts)
 declare const APP_VERSION: string;
