@@ -63,8 +63,8 @@ export function initSentry(): void {
       `chatapp-backend@${process.env.npm_package_version ?? '0.0.0'}`,
 
     // ─── Performance ───────────────────────────────────────────────────────
-    // 10% of requests in production. Set to 1.0 temporarily during profiling.
-    tracesSampleRate: isProduction ? 0.1 : 0.0,
+    // 10% of requests in production. Set to 1 temporarily during profiling.
+    tracesSampleRate: isProduction ? 0.1 : 0,
 
     // ─── Integrations ──────────────────────────────────────────────────────
     integrations: [
@@ -117,7 +117,7 @@ export const sentryRequestHandler = (): ReturnType<typeof Sentry.Handlers.reques
  * Call this in auth.middleware.ts AFTER validating the JWT.
  *
  * @example
- * setSentryUser({ id: user._id.toString(), role: user.role });
+ * setSentryUser({ id: ObjectIdToString(user._id), role: user.role });
  */
 export function setSentryUser(user: { id: string; role?: string }): void {
   if (_initialized) {

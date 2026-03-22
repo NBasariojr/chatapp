@@ -47,45 +47,50 @@ const LoginForm = ({
     }
   };
 
+  const validateEmail = (email: string): string | null => {
+    if (email.trim() === "") return "Email is required";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return "Please enter a valid email address";
+    }
+    return null;
+  };
+
+  const validatePassword = (password: string): string | null => {
+    if (password.trim() === "") return "Password is required";
+    
+    const requirements = passwordRequirements || { minLength: 6 };
+    
+    if (requirements.minLength && password.length < requirements.minLength) {
+      return `Password must be at least ${requirements.minLength} characters`;
+    }
+
+    if (requirements.requireUppercase && !/[A-Z]/.test(password)) {
+      return "Password must contain at least one uppercase letter";
+    }
+
+    if (requirements.requireLowercase && !/[a-z]/.test(password)) {
+      return "Password must contain at least one lowercase letter";
+    }
+
+    if (requirements.requireNumbers && !/\d/.test(password)) {
+      return "Password must contain at least one number";
+    }
+
+    if (requirements.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      return "Password must contain at least one special character";
+    }
+
+    return null;
+  };
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (formData.email.trim() === "") {
-      errors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = "Please enter a valid email address";
-    }
+    
+    const emailError = validateEmail(formData.email);
+    if (emailError) errors.email = emailError;
 
-    // Password validation with configurable requirements
-    if (formData.password.trim() === "") {
-      errors.password = "Password is required";
-    } else {
-      const requirements = passwordRequirements || { minLength: 6 };
-      const password = formData.password;
-
-      if (requirements.minLength && password.length < requirements.minLength) {
-        errors.password = `Password must be at least ${requirements.minLength} characters`;
-      }
-
-      if (requirements.requireUppercase && !/[A-Z]/.test(password)) {
-        errors.password = "Password must contain at least one uppercase letter";
-      }
-
-      if (requirements.requireLowercase && !/[a-z]/.test(password)) {
-        errors.password = "Password must contain at least one lowercase letter";
-      }
-
-      if (requirements.requireNumbers && !/\d/.test(password)) {
-        errors.password = "Password must contain at least one number";
-      }
-
-      if (
-        requirements.requireSpecialChars &&
-        !/[!@#$%^&*(),.?":{}|<>]/.test(password)
-      ) {
-        errors.password =
-          "Password must contain at least one special character";
-      }
-    }
+    const passwordError = validatePassword(formData.password);
+    if (passwordError) errors.password = passwordError;
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;

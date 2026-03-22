@@ -23,7 +23,7 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(({
   variant = "default",
   ...props
 }, ref) => {
-  const checkboxId = id || `checkbox-${Math.random().toString(36).substr(2, 9)}`;
+  const checkboxId = id || `checkbox-${Math.random().toString(36).slice(2, 11)}`;
 
   const variantClasses = {
     sm:      "h-4 w-4",

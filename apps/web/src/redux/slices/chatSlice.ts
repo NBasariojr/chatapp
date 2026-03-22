@@ -11,6 +11,9 @@ export interface ChatState {
   typingUsers: Record<string, string[]>;
   isLoading: boolean;
   error: string | null;
+  pendingMessages: Record<string, string>;
+  hasMore: Record<string, boolean>;
+  isLoadingMore: boolean;
 }
 
 const initialState: ChatState = {
@@ -21,6 +24,9 @@ const initialState: ChatState = {
   typingUsers: {},
   isLoading: false,
   error: null,
+  pendingMessages: {},
+  hasMore: {},
+  isLoadingMore: false,
 };
 
 export const fetchRooms = createAsyncThunk(
@@ -39,12 +45,12 @@ export const fetchRooms = createAsyncThunk(
 export const fetchMessages = createAsyncThunk(
   "chat/fetchMessages",
   async (
-    { roomId, page = 1 }: { roomId: string; page?: number },
+    { roomId, before }: { roomId: string; before?: string },
     { rejectWithValue },
   ) => {
     try {
-      const data = await chatService.getMessages(roomId, page);
-      return { roomId, messages: data.messages };
+      const data = await chatService.getMessages(roomId, { before });
+      return { roomId, messages: data.messages, hasMore: data.hasMore, before };
     } catch (err) {
       return rejectWithValue(
         err instanceof Error ? err.message : "Failed to fetch messages",
@@ -76,7 +82,6 @@ const chatSlice = createSlice({
       if (room) room.lastMessage = message;
     },
 
-    // ← ADDED: called by socket.service when message:deleted fires
     removeMessage(
       state,
       action: PayloadAction<{ roomId: string; messageId: string }>,
@@ -93,7 +98,6 @@ const chatSlice = createSlice({
       }
     },
 
-    // ← ADDED: called by socket.service when message:updated fires
     updateMessage(
       state,
       action: PayloadAction<{ roomId: string; messageId: string; content: string }>,
@@ -137,6 +141,64 @@ const chatSlice = createSlice({
         if (participant) participant.isOnline = isOnline;
       });
     },
+
+    addOptimisticMessage(
+      state,
+      action: PayloadAction<{ roomId: string; message: Message; tempId: string }>,
+    ) {
+      const { roomId, message, tempId } = action.payload;
+      if (!state.messages[roomId]) state.messages[roomId] = [];
+      state.messages[roomId].push(message);
+      state.pendingMessages[tempId] = roomId;
+    },
+
+    confirmMessage(
+      state,
+      action: PayloadAction<{ tempId: string; message: Message }>,
+    ) {
+      const { tempId, message } = action.payload;
+      const roomId = state.pendingMessages[tempId];
+      if (!roomId || !state.messages[roomId]) return;
+
+      state.messages[roomId] = state.messages[roomId].filter(
+        (m) => m._id !== tempId,
+      );
+
+      const alreadyExists = state.messages[roomId].some(
+        (m) => m._id === message._id,
+      );
+      if (!alreadyExists) {
+        state.messages[roomId].push(message);
+      }
+
+      const room = state.rooms.find((r) => r._id === roomId);
+      if (room) room.lastMessage = message;
+
+      delete state.pendingMessages[tempId];
+    },
+
+    rejectMessage(state, action: PayloadAction<{ tempId: string }>) {
+      const { tempId } = action.payload;
+      const roomId = state.pendingMessages[tempId];
+      if (!roomId || !state.messages[roomId]) return;
+
+      state.messages[roomId] = state.messages[roomId].filter(
+        (m) => m._id !== tempId,
+      );
+      delete state.pendingMessages[tempId];
+    },
+
+    prependMessages(
+      state,
+      action: PayloadAction<{ roomId: string; messages: Message[] }>,
+    ) {
+      const { roomId, messages } = action.payload;
+      if (!state.messages[roomId]) state.messages[roomId] = [];
+      // Prepend older messages, dedup against what's already loaded
+      const existingIds = new Set(state.messages[roomId].map((m) => m._id));
+      const newMessages = messages.filter((m) => !existingIds.has(m._id));
+      state.messages[roomId] = [...newMessages, ...state.messages[roomId]];
+    },
   },
 
   extraReducers: (builder) => {
@@ -144,9 +206,35 @@ const chatSlice = createSlice({
       .addCase(fetchRooms.fulfilled, (state, action) => {
         state.rooms = action.payload;
       })
+      // Initial load (no before cursor) — replace messages
+      // Load more (before cursor present) — prepend older messages
+      .addCase(fetchMessages.pending, (state, action) => {
+        if (action.meta.arg.before) {
+          state.isLoadingMore = true;
+        } else {
+          state.isLoading = true;
+        }
+      })
       .addCase(fetchMessages.fulfilled, (state, action) => {
-        const { roomId, messages } = action.payload;
-        state.messages[roomId] = messages;
+        const { roomId, messages, hasMore, before } = action.payload;
+        state.hasMore[roomId] = hasMore;
+        state.isLoading = false;
+        state.isLoadingMore = false;
+
+        if (before) {
+          // Load more — prepend, dedup
+          if (!state.messages[roomId]) state.messages[roomId] = [];
+          const existingIds = new Set(state.messages[roomId].map((m) => m._id));
+          const newMessages = messages.filter((m) => !existingIds.has(m._id));
+          state.messages[roomId] = [...newMessages, ...state.messages[roomId]];
+        } else {
+          // Initial load — replace
+          state.messages[roomId] = messages;
+        }
+      })
+      .addCase(fetchMessages.rejected, (state) => {
+        state.isLoading = false;
+        state.isLoadingMore = false;
       });
   },
 });
@@ -154,10 +242,14 @@ const chatSlice = createSlice({
 export const {
   setActiveRoom,
   addMessage,
-  removeMessage,    // ← ADDED
-  updateMessage,    // ← ADDED
+  removeMessage,
+  updateMessage,
   setTyping,
   updateUserStatus,
+  addOptimisticMessage,
+  confirmMessage,
+  rejectMessage,
+  prependMessages,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

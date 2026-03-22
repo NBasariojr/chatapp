@@ -38,18 +38,20 @@ const allowedSocketOrigins = [
   "http://127.0.0.1:5174",
 ].filter(Boolean) as string[];
 
+// Mirror the same Vercel subdomain restriction applied in app.ts CORS config.
+// Only preview deployments of YOUR project are allowed, not all of Vercel.
+const clientHost = (process.env.CLIENT_URL || '').replace(/^https?:\/\//, '');
+const vercelSubdomain = clientHost.endsWith('.vercel.app') ? `.${clientHost}` : null;
+
 const io = new SocketServer(httpServer, {
   cors: {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       if (
-        allowedSocketOrigins.some(
-          (o) =>
-            o === origin ||
-            origin.endsWith(".ngrok-free.app") ||
-            origin.endsWith(".ngrok.app") ||
-            origin.endsWith(".vercel.app"),
-        )
+        allowedSocketOrigins.includes(origin) ||
+        origin.endsWith('.ngrok-free.app') ||
+        origin.endsWith('.ngrok.app') ||
+        (vercelSubdomain !== null && origin.endsWith(vercelSubdomain))
       ) {
         return callback(null, true);
       }
@@ -59,6 +61,10 @@ const io = new SocketServer(httpServer, {
     credentials: true,
   },
   pingTimeout: 60000,
+  // Prevent large payload abuse — a client sending a 100MB socket message
+  // would exhaust memory without this limit. Default is 1MB; making it
+  // explicit ensures it survives any future Socket.IO version changes.
+  maxHttpBufferSize: 1e6, // 1MB
 });
 
 setIO(io);
@@ -102,6 +108,15 @@ const startServer = async (): Promise<void> => {
           tags: { component: 'redis-adapter' }
         });
 
+        // REDIS_ADAPTER_REQUIRED=true in production prevents silent degradation.
+        // Without this, a Redis hiccup causes multi-instance deployments to lose
+        // socket sync — users stop seeing each other's messages with no visible error.
+        const strictAdapter = process.env.REDIS_ADAPTER_REQUIRED === 'true';
+        if (strictAdapter) {
+          console.error('❌ Redis adapter is REQUIRED but failed. Shutting down to prevent inconsistent cluster state.');
+          process.exit(1);
+        }
+
         console.warn(
           '⚠️ Redis adapter failed — falling back to in-memory. ' +
           'Multi-instance sync DISABLED.',
@@ -135,7 +150,7 @@ const gracefulShutdown = async () => {
     console.log("Shutdown already in progress, ignoring duplicate signal");
     return;
   }
-  
+
   isShuttingDown = true;
   const forceExit = setTimeout(() => {
     console.error("Forceful shutdown after 10s timeout.");
@@ -143,20 +158,24 @@ const gracefulShutdown = async () => {
   }, 10000);
   forceExit.unref();
 
-  const shutdown = async () => {
-    return new Promise<void>((resolve) => {
-      httpServer.close(async () => {
-        try {
-          await io.close();
-          await closeRedisConnections();
-          console.log("Server closed.");
-          resolve();
-        } catch (error) {
-          console.error("Error during shutdown:", error);
-          resolve();
-        }
+  const shutdown = async (): Promise<void> => {
+    try {
+      // Step 1 — stop accepting new socket connections and drain existing ones
+      await io.close();
+      console.log('🔌 Socket.IO closed.');
+
+      // Step 2 — stop accepting new HTTP connections
+      await new Promise<void>((resolve) => {
+        httpServer.close(() => resolve());
       });
-    });
+      console.log('🌐 HTTP server closed.');
+
+      // Step 3 — close Redis connections last (adapter may still need them during step 1)
+      await closeRedisConnections();
+      console.log('✅ Server shut down cleanly.');
+    } catch (error) {
+      console.error('Error during shutdown:', error);
+    }
   };
 
   await shutdown();

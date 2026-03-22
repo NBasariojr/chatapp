@@ -2,16 +2,20 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "redux/store";
-import type { ReplyPreview } from "@chatapp/shared";
+import type { ReplyPreview, Message, User } from "@chatapp/shared";
 import {
   fetchRooms,
   fetchMessages,
   setActiveRoom,
+  addOptimisticMessage,
+  confirmMessage,
+  rejectMessage,
 } from "redux/slices/chatSlice";
 import {
   joinRoom,
   sendTyping,
   stopTyping,
+  sendMessageWithAck,
 } from "services/socket.service";
 import { chatService } from "services/chat.service";
 import Header from "components/ui/Header";
@@ -67,7 +71,7 @@ const saveRoomSystemEvents = (events: Record<string, SystemEvent[]>): void => {
 
 const ChatDashboard = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { user, token } = useSelector((state: RootState) => state.auth);
+  const { user } = useSelector((state: RootState) => state.auth);
   const { rooms, messages, activeRoomId } = useSelector(
     (state: RootState) => state.chat,
   );
@@ -137,13 +141,41 @@ const ChatDashboard = () => {
     fileSize?: string;
     replyTo?: string;
   }) => {
-    if (!activeRoomId) return;
-    await chatService.sendMessage(
-      activeRoomId,
-      messageData.content,
-      messageData.type,
-      messageData.replyTo,
-    );
+    if (!activeRoomId || !user) return;
+
+    const tempId = `temp_${crypto.randomUUID()}`;
+
+    // Build optimistic message — shown immediately in the UI
+    const optimisticMessage: Message = {
+      _id: tempId,
+      content: messageData.content,
+      type: messageData.type,
+      status: 'sent',
+      sender: user as User,
+      roomId: activeRoomId,
+      replyTo: messageData.replyTo ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    dispatch(addOptimisticMessage({ roomId: activeRoomId, message: optimisticMessage, tempId }));
+
+    try {
+      const confirmed = await sendMessageWithAck({
+        roomId: activeRoomId,
+        content: messageData.content,
+        type: messageData.type,
+        replyTo: messageData.replyTo,
+      });
+      // Replace optimistic placeholder with server-confirmed message
+      dispatch(confirmMessage({ tempId, message: confirmed }));
+    } catch (err) {
+      // Remove placeholder and surface the error
+      dispatch(rejectMessage({ tempId }));
+      console.error('[handleSendMessage] Failed to deliver:', err);
+      // TODO: Replace alert with a toast notification (Milestone 8)
+      alert(`Message failed to send: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   };
 
   const handleEditMessage = async (messageId: string, content: string) => {

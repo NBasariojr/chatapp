@@ -131,3 +131,43 @@ export const sendTyping = (roomId: string): void => {
 export const stopTyping = (roomId: string): void => {
   socket?.emit('user:stop-typing', { roomId });
 };
+
+// ─── Message send with acknowledgment ─────────────────────────────────────────
+//
+// Emits via socket instead of HTTP, with a 10s timeout guard.
+// Returns the server-confirmed message on success.
+// Rejects with a descriptive error on failure or timeout.
+//
+type SendAckResponse = { success: boolean; message?: Message; error?: string };
+
+export const sendMessageWithAck = (payload: {
+  roomId: string;
+  content: string;
+  type?: string;
+  replyTo?: string;
+}): Promise<Message> => {
+  return new Promise((resolve, reject) => {
+    if (!socket?.connected) {
+      reject(new Error('Socket is not connected'));
+      return;
+    }
+
+    // Guard against a server that never calls the ack
+    const timeout = setTimeout(() => {
+      reject(new Error('Message acknowledgment timed out after 10s'));
+    }, 10_000);
+
+    socket.emit(
+      'message:send',
+      payload,
+      (response: SendAckResponse) => {
+        clearTimeout(timeout);
+        if (response.success && response.message) {
+          resolve(response.message);
+        } else {
+          reject(new Error(response.error ?? 'Failed to send message'));
+        }
+      },
+    );
+  });
+};
