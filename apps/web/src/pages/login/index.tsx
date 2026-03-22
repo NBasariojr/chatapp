@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "redux/store";
@@ -41,18 +41,19 @@ const Login = () => {
     navigate("/chat-dashboard");
   };
 
-  const handleOAuthLogin = async (provider: string) => {
-    setOauthError("");
-    if (provider === "google") {
-      // Google OAuth is handled by the OAuthButtons component
-      // This callback is for when OAuth login succeeds
-      const storedToken = localStorage.getItem("chatapp_token");
-      if (storedToken) {
-        connectSocket(storedToken);
-        navigate("/chat-dashboard");
+  const handleOAuthLogin = useCallback(
+    async (provider: string) => {
+      setOauthError("");
+      if (provider === "google") {
+        const storedToken = localStorage.getItem("chatapp_token");
+        if (storedToken) {
+          connectSocket(storedToken);
+          navigate("/chat-dashboard");
+        }
       }
-    }
-  };
+    },
+    [navigate],
+  );
 
   const handleNavigateToRegister = () => navigate("/register");
 
