@@ -95,14 +95,15 @@ const OAuthButtons = ({
   const isDisabled = isLoading || isOAuthLoading;
 
   const onSuccess = useCallback(
-    async (codeResponse: { code: string }) => {
-      try {
-        await dispatch(googleLogin(codeResponse.code)).unwrap();
-        onOAuthLogin?.("google");
-      } catch (error) {
-        console.error("[Google OAuth] Login failed:", error);
-        // Error is stored in Redux state.auth.oauthError — already rendered below
-      }
+    (codeResponse: { code: string }) => {
+      dispatch(googleLogin(codeResponse.code))
+        .unwrap()
+        .then(() => {
+          onOAuthLogin?.("google");
+        })
+        .catch((error) => {
+          console.error("[Google OAuth] Login failed:", error);
+        });
     },
     [dispatch, onOAuthLogin],
   );

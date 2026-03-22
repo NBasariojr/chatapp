@@ -27,19 +27,22 @@ const Login = () => {
     };
   }, [dispatch]);
 
-  const handleLogin = async (formData: {
-    email: string;
-    password: string;
-    rememberMe: boolean;
-  }) => {
-    setOauthError("");
-    await dispatch(
-      login({ email: formData.email, password: formData.password }),
-    ).unwrap();
-    const storedToken = localStorage.getItem("chatapp_token");
-    if (storedToken) connectSocket(storedToken);
-    navigate("/chat-dashboard");
-  };
+  const handleLogin = useCallback(
+    async (formData: {
+      email: string;
+      password: string;
+      rememberMe: boolean;
+    }) => {
+      setOauthError("");
+      await dispatch(
+        login({ email: formData.email, password: formData.password }),
+      ).unwrap();
+      const storedToken = localStorage.getItem("chatapp_token");
+      if (storedToken) connectSocket(storedToken);
+      navigate("/chat-dashboard");
+    },
+    [navigate, dispatch],
+  );
 
   const handleOAuthLogin = useCallback(
     async (provider: string) => {
@@ -55,7 +58,9 @@ const Login = () => {
     [navigate],
   );
 
-  const handleNavigateToRegister = () => navigate("/register");
+  const handleNavigateToRegister = useCallback(() => navigate("/register"), [
+    navigate,
+  ]);
 
   // Navigate to the forgot-password page
   const handleForgotPassword = () => navigate("/forgot-password");
