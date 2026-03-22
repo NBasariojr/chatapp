@@ -140,7 +140,4 @@ userSchema.index({ passwordResetToken: 1 }, { sparse: true });
 // sparse: true — only indexes non-null googleId values (most users pre-OAuth won't have it)
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 
-// Explicit declaration for auditability — index is enforced by unique:true in field def above
-userSchema.index({ email: 1 }, { unique: true });
-
 export const User = mongoose.model<IUser>('User', userSchema);
