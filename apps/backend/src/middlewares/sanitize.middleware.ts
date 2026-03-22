@@ -78,3 +78,26 @@ export const sanitizeBody = (
     next(error);
   }
 };
+
+/**
+ * Express middleware that sanitizes req.query before it reaches any controller.
+ * Applied globally in app.ts alongside sanitizeBody.
+ *
+ * req.query values are always strings or string arrays when parsed by Express —
+ * we only need to strip HTML and trim, not block $ keys (those aren't valid
+ * query param names in practice and Express won't parse them as operators).
+ */
+export const sanitizeQuery = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  try {
+    if (req.query && typeof req.query === "object") {
+      req.query = sanitizeValue(req.query) as typeof req.query;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};

@@ -215,3 +215,26 @@ export const oauthLimiter = createLimiter({
     message: 'Too many sign-in attempts. Please try again in 15 minutes.',
   },
 });
+
+// ─── Message Send Limiter ─────────────────────────────────────────────────────
+// Prevents message spam in chat rooms.
+// Keyed by userId from the JWT — IP-based keying would break users behind NAT
+// (family, office) where many users share one IP.
+// 60 messages per minute matches typical human typing speed with generous headroom.
+// Burst-heavy users (copy-paste flooding) will hit this before globalLimiter.
+
+export const messageLimiter = createLimiter({
+  prefix: 'rl:messages:',
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  keyGenerator: (req: Request) => {
+    // req.user is set by authenticate middleware which runs before this
+    // Fall back to IP if somehow user is missing
+    const userId = (req as Request & { user?: { _id: string } }).user?._id;
+    return userId ?? getIp(req);
+  },
+  message: {
+    success: false,
+    message: 'You are sending messages too quickly. Please slow down.',
+  },
+});
