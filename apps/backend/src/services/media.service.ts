@@ -1,18 +1,18 @@
 // backend/src/services/media.service.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
 const getSupabase = () => {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_KEY;
 
   if (!url || !key) {
-    throw new Error('Supabase credentials not configured');
+    throw new Error("Supabase credentials not configured");
   }
 
   return createClient(url, key);
 };
 
-const BUCKET = process.env.SUPABASE_BUCKET || 'chatapp-media';
+const BUCKET = process.env.SUPABASE_BUCKET || "chatapp-media";
 
 export interface UploadResult {
   url: string;
@@ -26,12 +26,16 @@ export interface UploadResult {
  */
 export const uploadMedia = async (
   file: Express.Multer.File,
-  userId: string
+  userId: string,
 ): Promise<UploadResult> => {
   const supabase = getSupabase();
 
   // Sanitize filename to prevent path traversal
-  const ext = file.originalname.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || 'bin';
+  const ext =
+    file.originalname
+      .split(".")
+      .pop()
+      ?.replaceAll(/[^a-zA-Z0-9]/g, "") || "bin";
   const filename = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
   const { error } = await supabase.storage
@@ -45,7 +49,9 @@ export const uploadMedia = async (
     throw new Error(`Upload failed: ${error.message}`);
   }
 
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filename);
+  const { data: urlData } = supabase.storage
+    .from(BUCKET)
+    .getPublicUrl(filename);
 
   return {
     url: urlData.publicUrl,

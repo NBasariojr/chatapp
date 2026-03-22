@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { BadRequestError } from '../utils/errors';
+import { Request, Response, NextFunction } from "express";
+import { BadRequestError } from "../utils/errors";
 
 // ─── Dangerous key patterns ────────────────────────────────────────────────────
 // MongoDB operators start with $ — allowing them in body fields enables
@@ -31,15 +31,15 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
   // Guard against pathological nesting (e.g. 1000-level deep JSON objects)
   if (depth > 10) return value;
 
-  if (typeof value === 'string') {
-    return value.replace(HTML_TAG_PATTERN, '').trim();
+  if (typeof value === "string") {
+    return value.replaceAll(HTML_TAG_PATTERN, "").trim();
   }
 
   if (Array.isArray(value)) {
     return value.map((item) => sanitizeValue(item, depth + 1));
   }
 
-  if (value !== null && typeof value === 'object') {
+  if (value !== null && typeof value === "object") {
     const sanitized: Record<string, unknown> = {};
 
     for (const key of Object.keys(value as Record<string, unknown>)) {
@@ -70,7 +70,7 @@ export const sanitizeBody = (
   next: NextFunction,
 ): void => {
   try {
-    if (req.body && typeof req.body === 'object') {
+    if (req.body && typeof req.body === "object") {
       req.body = sanitizeValue(req.body);
     }
     next();
