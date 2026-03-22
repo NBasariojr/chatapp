@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../utils/errors';
-import { captureException } from '../config/sentry';
+import { Request, Response, NextFunction } from "express";
+import { AppError } from "../utils/errors";
+import { captureException } from "../config/sentry";
 
 export const errorHandler = (
   err: AppError | Error,
@@ -15,29 +15,31 @@ export const errorHandler = (
   // Sentry Capture
   if (statusCode >= 500 && !isOperational) {
     captureException(err, {
-      userId: (req as Request & { user?: { _id?: unknown } }).user?._id?.toString(),
+      userId: (
+        req as Request & { user?: { _id?: unknown } }
+      ).user?._id?.toString(),
       tags: {
         statusCode: String(statusCode),
         method: req.method,
         path: req.path,
       },
       extra: {
-        contentType: req.headers['content-type'],
-        userAgent: req.headers['user-agent'],
+        contentType: req.headers["content-type"],
+        userAgent: req.headers["user-agent"],
       },
     });
   }
 
   // Response
-  const message = isOperational ? err.message : 'Internal server error';
+  const message = isOperational ? err.message : "Internal server error";
 
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === "development") {
     console.error(`[Error ${statusCode}]`, err);
   }
 
   res.status(statusCode).json({
     success: false,
     message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 };

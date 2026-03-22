@@ -1,12 +1,12 @@
-import { Request } from 'express';
-import { AuditLog, AuditAction } from '../models/audit-log.model';
-import { captureException } from '../config/sentry';
+import { Request } from "express";
+import { AuditLog, AuditAction } from "../models/audit-log.model";
+import { captureException } from "../config/sentry";
 
 interface AuditEventPayload {
-  action:   AuditAction;
-  req:      Request;
-  userId?:  string;
-  email?:   string;
+  action: AuditAction;
+  req: Request;
+  userId?: string;
+  email?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -26,18 +26,18 @@ export const logAuditEvent = (payload: AuditEventPayload): void => {
 
   // Extract real IP — respects express 'trust proxy' setting in app.ts
   const ip =
-    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
     req.ip ||
-    'unknown';
+    "unknown";
 
-  const userAgent = req.headers['user-agent'] || 'unknown';
+  const userAgent = req.headers["user-agent"] || "unknown";
 
   // Intentionally not awaited — fire and forget
   AuditLog.create({ action, userId, email, ip, userAgent, metadata }).catch(
     (err) => {
       // Audit write failure is an infrastructure error → Sentry
       captureException(err, {
-        tags: { component: 'audit-service' },
+        tags: { component: "audit-service" },
         extra: { action, userId, email },
       });
       // Never rethrow — the parent request must not be affected
