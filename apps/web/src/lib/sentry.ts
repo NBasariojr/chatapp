@@ -31,15 +31,16 @@ export function initSentry(): void {
     dsn,
     environment,
     release: release ?? `chatapp-web@${APP_VERSION}`, // APP_VERSION injected by Vite
+    tunnel: '/api/sentry-tunnel', // Proxy through backend to avoid ad blockers
 
     // ─── Performance ───────────────────────────────────────────────────────
-    tracesSampleRate: environment === "production" ? 0.1 : 0.0,
+    tracesSampleRate: environment === "production" ? 0.1 : 0,
 
     // ─── Session Replay ────────────────────────────────────────────────────
     // Records a video-like replay of user actions when an error occurs.
     // IMPORTANT: mask all text and block all media to avoid capturing PII.
-    replaysSessionSampleRate: 0.0, // Don't record normal sessions
-    replaysOnErrorSampleRate: 1.0, // Record 100% of sessions with errors
+    replaysSessionSampleRate: 0, // Don't record normal sessions
+    replaysOnErrorSampleRate: 1, // Record 100% of sessions with errors
 
     // ─── Integrations ──────────────────────────────────────────────────────
     integrations: [
