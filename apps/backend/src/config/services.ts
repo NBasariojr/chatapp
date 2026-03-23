@@ -57,7 +57,7 @@ redis: {
 
   // Adapter clients (pub/sub pair — separate from cache client)
   adapter: {
-    maxRetriesPerRequest: null as null,
+    maxRetriesPerRequest: null,
     enableReadyCheck: false,
     lazyConnect: true,   // ← ADDED
     retryStrategy: (times: number): number | null =>

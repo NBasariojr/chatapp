@@ -56,6 +56,17 @@ export const connectSocket = (token: string): Socket => {
     store.dispatch(addMessage({ roomId: message.roomId, message }));
   });
 
+  // ← ADD: receives batch of messages missed while offline
+  // Each message is dispatched individually through the same addMessage path.
+  // The existing dedup guard in chatSlice (alreadyExists check) prevents
+  // duplicates if the same message was already loaded via fetchMessages.
+  socket.on('messages:queued', (messages: Message[]) => {
+    messages.forEach((message) => {
+      store.dispatch(addMessage({ roomId: message.roomId, message }));
+    });
+    console.log(`📬 Received ${messages.length} queued message(s)`);
+  });
+
   // ← ADDED: server emits this when someone edits a message
   // Updates the content in the Redux store so all clients see the change
   socket.on('message:updated', (payload: {

@@ -158,6 +158,7 @@ export interface SocketEvents {
     replyTo?: string;
   }) => void;
   'message:received': (message: Message) => void;
+  'messages:queued': (messages: Message[]) => void;
   'message:read': (payload: { messageId: string; roomId: string }) => void;
 
   // ← ADDED: emitted by server when a message is edited
