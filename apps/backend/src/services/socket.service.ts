@@ -77,7 +77,7 @@ const deliverQueuedMessages = async (
       });
 
     // Reverse to chronological order (oldest → newest) before delivering
-    const missed = missedDesc.reverse();
+    const missed = [...missedDesc].reverse();
 
     if (missed.length === 0) return;
 
