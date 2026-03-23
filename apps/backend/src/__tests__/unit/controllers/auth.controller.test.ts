@@ -1,4 +1,5 @@
 import { mockRequest, mockResponse, mockNext } from '../../helpers/mockRequest';
+import { TestUserFactory } from '../../helpers/testUserFactory';
 
 // ─── Mock all external dependencies ──────────────────────────────────────────
 // These are mocked at module level so they never touch real DB/Redis/email
@@ -51,7 +52,7 @@ const mockUserDoc = {
   email: 'test@example.com',
   role: 'user',
   authProvider: 'local',
-  password: '$2a$12$hashedpassword',
+  password: TestUserFactory.generateTestHash(),
   comparePassword: jest.fn(),
   populate: jest.fn(),
 };
@@ -59,16 +60,19 @@ const mockUserDoc = {
 // ─── register ────────────────────────────────────────────────────────────────
 
 describe('register', () => {
+  let testUser: any;
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('creates a user and returns 201 with token on valid input', async () => {
+    testUser = await TestUserFactory.createUser();
     const req = mockRequest({
       body: {
-        username: 'newuser',
-        email: 'new@example.com',
-        password: 'Password1',
+        username: testUser.username,
+        email: testUser.email,
+        password: testUser.password,
       },
     });
     const res = mockResponse();
@@ -93,7 +97,13 @@ describe('register', () => {
   });
 
   it('calls next(ValidationError) when body is invalid', async () => {
-    const req = mockRequest({ body: { username: 'x', email: 'not-email', password: 'weak' } });
+    const req = mockRequest({ 
+      body: { 
+        username: TestUserFactory.generateInvalidUsername(), 
+        email: TestUserFactory.generateInvalidEmail(), 
+        password: TestUserFactory.generateInvalidPassword() 
+      } 
+    });
     const res = mockResponse();
 
     await register(req, res, mockNext);
@@ -103,12 +113,13 @@ describe('register', () => {
   });
 
   it('calls next(ConflictError) when email already in use', async () => {
+    testUser = await TestUserFactory.createUser();
     const req = mockRequest({
-      body: { username: 'newuser', email: 'test@example.com', password: 'Password1' },
+      body: { username: 'newuser', email: testUser.email, password: testUser.password },
     });
     const res = mockResponse();
 
-    (MockUser.findOne as jest.Mock).mockResolvedValue({ ...mockUserDoc, email: 'test@example.com' });
+    (MockUser.findOne as jest.Mock).mockResolvedValue({ ...mockUserDoc, email: testUser.email });
 
     await register(req, res, mockNext);
 
@@ -117,15 +128,16 @@ describe('register', () => {
   });
 
   it('calls next(ConflictError) when username already taken', async () => {
+    testUser = await TestUserFactory.createUser();
     const req = mockRequest({
-      body: { username: 'testuser', email: 'other@example.com', password: 'Password1' },
+      body: { username: testUser.username, email: 'other@example.com', password: testUser.password },
     });
     const res = mockResponse();
 
     (MockUser.findOne as jest.Mock).mockResolvedValue({
       ...mockUserDoc,
       email: 'different@example.com',
-      username: 'testuser',
+      username: testUser.username,
     });
 
     await register(req, res, mockNext);
@@ -135,8 +147,9 @@ describe('register', () => {
   });
 
   it('calls next(error) when User.create throws', async () => {
+    testUser = await TestUserFactory.createUser();
     const req = mockRequest({
-      body: { username: 'newuser', email: 'new@example.com', password: 'Password1' },
+      body: { username: testUser.username, email: testUser.email, password: testUser.password },
     });
     const res = mockResponse();
     const dbError = new Error('DB connection failed');
@@ -153,13 +166,15 @@ describe('register', () => {
 // ─── login ───────────────────────────────────────────────────────────────────
 
 describe('login', () => {
+  let testUser: any;
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  const validBody = { email: 'test@example.com', password: 'Password1' };
-
   it('returns 200 with token on valid credentials', async () => {
+    testUser = await TestUserFactory.createUser();
+    const validBody = { email: testUser.email, password: testUser.password };
     const req = mockRequest({ body: validBody });
     const res = mockResponse();
 
@@ -179,6 +194,8 @@ describe('login', () => {
   });
 
   it('calls next(UnauthorizedError) when user not found', async () => {
+    testUser = await TestUserFactory.createUser();
+    const validBody = { email: testUser.email, password: testUser.password };
     const req = mockRequest({ body: validBody });
     const res = mockResponse();
 
@@ -195,6 +212,8 @@ describe('login', () => {
   });
 
   it('calls next(UnauthorizedError) and logs failure on wrong password', async () => {
+    testUser = await TestUserFactory.createUser();
+    const validBody = { email: testUser.email, password: testUser.password };
     const req = mockRequest({ body: validBody });
     const res = mockResponse();
 
@@ -211,6 +230,8 @@ describe('login', () => {
   });
 
   it('calls next(UnauthorizedError) for Google-only account', async () => {
+    testUser = await TestUserFactory.createUser();
+    const validBody = { email: testUser.email, password: testUser.password };
     const req = mockRequest({ body: validBody });
     const res = mockResponse();
 
@@ -225,7 +246,12 @@ describe('login', () => {
   });
 
   it('calls next(ValidationError) on invalid body format', async () => {
-    const req = mockRequest({ body: { email: 'not-an-email', password: '' } });
+    const req = mockRequest({ 
+      body: { 
+        email: TestUserFactory.generateInvalidEmail(), 
+        password: TestUserFactory.generateInvalidPassword() 
+      } 
+    });
     const res = mockResponse();
 
     await login(req, res, mockNext);
@@ -298,6 +324,8 @@ describe('getMe', () => {
 // ─── forgotPassword ───────────────────────────────────────────────────────────
 
 describe('forgotPassword', () => {
+  let testUser: any;
+
   it('returns generic response when user not found — prevents enumeration', async () => {
     const req = mockRequest({ body: { email: 'nonexistent@example.com' } });
     const res = mockResponse();
@@ -314,10 +342,11 @@ describe('forgotPassword', () => {
   });
 
   it('sends reset email and returns generic response for valid user', async () => {
-    const req = mockRequest({ body: { email: 'test@example.com' } });
+    testUser = await TestUserFactory.createUser();
+    const req = mockRequest({ body: { email: testUser.email } });
     const res = mockResponse();
 
-    const userWithPassword = { ...mockUserDoc, password: '$2a$12$hash' };
+    const userWithPassword = { ...mockUserDoc, password: TestUserFactory.generateTestHash() };
     const selectMock = { select: jest.fn().mockResolvedValue(userWithPassword) };
     (MockUser.findOne as jest.Mock).mockReturnValue(selectMock);
     (MockUser.findByIdAndUpdate as jest.Mock).mockResolvedValue(null);
@@ -325,7 +354,7 @@ describe('forgotPassword', () => {
     await forgotPassword(req, res, mockNext);
 
     expect(sendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'test@example.com' }),
+      expect.objectContaining({ to: mockUserDoc.email }),
     );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true }),
@@ -336,7 +365,7 @@ describe('forgotPassword', () => {
   });
 
   it('calls next(ValidationError) on invalid email format', async () => {
-    const req = mockRequest({ body: { email: 'not-an-email' } });
+    const req = mockRequest({ body: { email: TestUserFactory.generateInvalidEmail() } });
     const res = mockResponse();
 
     await forgotPassword(req, res, mockNext);
@@ -346,10 +375,11 @@ describe('forgotPassword', () => {
   });
 
   it('calls next(error) and clears token when email send fails', async () => {
-    const req = mockRequest({ body: { email: 'test@example.com' } });
+    testUser = await TestUserFactory.createUser();
+    const req = mockRequest({ body: { email: testUser.email } });
     const res = mockResponse();
 
-    const userWithPassword = { ...mockUserDoc, password: '$2a$12$hash' };
+    const userWithPassword = { ...mockUserDoc, password: TestUserFactory.generateTestHash() };
     const selectMock = { select: jest.fn().mockResolvedValue(userWithPassword) };
     (MockUser.findOne as jest.Mock).mockReturnValue(selectMock);
     (MockUser.findByIdAndUpdate as jest.Mock).mockResolvedValue(null);

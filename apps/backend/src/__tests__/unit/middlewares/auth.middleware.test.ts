@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { mockRequest, mockResponse, mockNext } from '../../helpers/mockRequest';
+import { TestUserFactory } from '../../helpers/testUserFactory';
 
 jest.mock('../../../models/user.model');
 jest.mock('../../../config/sentry', () => ({ setSentryUser: jest.fn() }));
@@ -11,18 +12,23 @@ import { User } from '../../../models/user.model';
 const MockUser = User as jest.Mocked<typeof User>;
 
 const mockUserDoc = {
-  _id: { toHexString: () => '507f1f77bcf86cd799439011' },
+  _id: {
+    toHexString: () => '507f1f77bcf86cd799439011',
+    toString: () => '507f1f77bcf86cd799439011',
+  },
   role: 'user',
   passwordChangedAt: null,
 };
 
+// Generate dynamic test JWT secret
+const testJwtSecret = TestUserFactory.generateTestJwtSecret();
 const validToken = jwt.sign(
   { id: '507f1f77bcf86cd799439011', role: 'user', iat: Math.floor(Date.now() / 1000) - 10 },
-  'test_secret',
+  testJwtSecret,
 );
 
 // Set JWT_SECRET for all tests
-beforeAll(() => { process.env.JWT_SECRET = 'test_secret'; });
+beforeAll(() => { process.env.JWT_SECRET = testJwtSecret; });
 afterAll(() => { delete process.env.JWT_SECRET; });
 
 // ─── authenticate ─────────────────────────────────────────────────────────────
@@ -91,7 +97,7 @@ describe('authenticate', () => {
   it('returns 401 when token was issued before password change', async () => {
     const oldToken = jwt.sign(
       { id: '507f1f77bcf86cd799439011', role: 'user', iat: 1000 },
-      'test_secret',
+      testJwtSecret,
     );
     const req = mockRequest({
       headers: { authorization: `Bearer ${oldToken}` },

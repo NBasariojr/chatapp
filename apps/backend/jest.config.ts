@@ -1,5 +1,8 @@
 import type { Config } from 'jest';
 
+// Load test environment variables
+require('dotenv').config({ path: '.env.test' });
+
 const config: Config = {
   // Use ts-jest to compile TypeScript test files
   preset: 'ts-jest',
