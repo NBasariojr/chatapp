@@ -1,11 +1,7 @@
 import request from 'supertest';
 import express from 'express';
+import mongoose from 'mongoose';
 import { connectTestDb, clearTestDb, disconnectTestDb } from '../helpers/setupDb';
-import { TestUserFactory } from '../helpers/testUserFactory';
-
-// Set JWT secret BEFORE any imports that use it
-process.env.JWT_SECRET = 'integration_test_secret';
-process.env.JWT_EXPIRES_IN = '7d';
 
 // Mock Redis and email — not available in test environment
 jest.mock('../../config/redis', () => ({
@@ -24,22 +20,6 @@ jest.mock('../../config/sentry', () => ({
   captureException: jest.fn(),
 }));
 jest.mock('../../services/audit.service', () => ({ logAuditEvent: jest.fn() }));
-jest.mock('../../config/rateLimiter', () => {
-  // Replace all limiters with pass-through middleware for tests
-  // Rate limiting is tested separately — integration tests verify business logic
-  const passThrough = (_req: any, _res: any, next: any) => next();
-  return {
-    globalLimiter: passThrough,
-    loginLimiter: passThrough,
-    registerLimiter: passThrough,
-    forgotPasswordIpLimiter: passThrough,
-    forgotPasswordEmailLimiter: passThrough,
-    resetTokenGetLimiter: passThrough,
-    resetTokenPostLimiter: passThrough,
-    oauthLimiter: passThrough,
-    messageLimiter: passThrough,
-  };
-});
 
 // Set required env vars
 beforeAll(() => {
@@ -71,25 +51,21 @@ afterAll(async () => { await disconnectTestDb(); });
 // ─── POST /api/auth/register ──────────────────────────────────────────────────
 
 describe('POST /api/auth/register', () => {
-  let testUser: any;
-
-  beforeEach(async () => {
-    testUser = await TestUserFactory.createUser();
-  });
+  const validPayload = {
+    username: 'testuser',
+    email: 'test@example.com',
+    password: 'Password1',
+  };
 
   it('creates a user and returns 201 with token', async () => {
     const res = await request(app)
       .post('/api/auth/register')
-      .send({
-        username: testUser.username,
-        email: testUser.email,
-        password: testUser.password,
-      });
+      .send(validPayload);
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.data.token).toBeDefined();
-    expect(res.body.data.user.email).toBe(testUser.email);
+    expect(res.body.data.user.email).toBe('test@example.com');
     // Password must never be returned
     expect(res.body.data.user.password).toBeUndefined();
   });
@@ -97,53 +73,29 @@ describe('POST /api/auth/register', () => {
   it('returns 422 on invalid input', async () => {
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ 
-        username: TestUserFactory.generateInvalidUsername(), 
-        email: TestUserFactory.generateInvalidEmail(), 
-        password: TestUserFactory.generateInvalidPassword() 
-      });
+      .send({ username: 'x', email: 'bad', password: 'weak' });
 
     expect(res.status).toBe(422);
     expect(res.body.success).toBe(false);
   });
 
   it('returns 409 when email already in use', async () => {
-    // First, register a user
-    await request(app).post('/api/auth/register').send({
-      username: testUser.username,
-      email: testUser.email,
-      password: testUser.password,
-    });
+    await request(app).post('/api/auth/register').send(validPayload);
 
-    // Try to register with same email but different username
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ 
-        username: 'otheruser', 
-        email: testUser.email, 
-        password: testUser.password 
-      });
+      .send({ ...validPayload, username: 'otheruser' });
 
     expect(res.status).toBe(409);
     expect(res.body.message).toContain('Email already in use');
   });
 
   it('returns 409 when username already taken', async () => {
-    // First, register a user
-    await request(app).post('/api/auth/register').send({
-      username: testUser.username,
-      email: testUser.email,
-      password: testUser.password,
-    });
+    await request(app).post('/api/auth/register').send(validPayload);
 
-    // Try to register with same username but different email
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ 
-        username: testUser.username, 
-        email: 'other@example.com', 
-        password: testUser.password 
-      });
+      .send({ ...validPayload, email: 'other@example.com' });
 
     expect(res.status).toBe(409);
     expect(res.body.message).toContain('Username already taken');
@@ -153,22 +105,20 @@ describe('POST /api/auth/register', () => {
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
 
 describe('POST /api/auth/login', () => {
-  let testUser: any;
+  const registerPayload = {
+    username: 'loginuser',
+    email: 'login@example.com',
+    password: 'Password1',
+  };
 
   beforeEach(async () => {
-    testUser = await TestUserFactory.createUser();
-    // Register the user first
-    await request(app).post('/api/auth/register').send({
-      username: testUser.username,
-      email: testUser.email,
-      password: testUser.password,
-    });
+    await request(app).post('/api/auth/register').send(registerPayload);
   });
 
   it('returns 200 with token on valid credentials', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ email: testUser.email, password: testUser.password });
+      .send({ email: 'login@example.com', password: 'Password1' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -178,7 +128,7 @@ describe('POST /api/auth/login', () => {
   it('returns 401 on wrong password', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ email: testUser.email, password: TestUserFactory.generateWrongPassword() });
+      .send({ email: 'login@example.com', password: 'WrongPass1' });
 
     expect(res.status).toBe(401);
     expect(res.body.success).toBe(false);
@@ -189,7 +139,7 @@ describe('POST /api/auth/login', () => {
   it('returns 401 on non-existent email', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ email: 'nonexistent@example.com', password: testUser.password });
+      .send({ email: 'nobody@example.com', password: 'Password1' });
 
     expect(res.status).toBe(401);
     // Same message as wrong password — prevents user enumeration
@@ -199,7 +149,7 @@ describe('POST /api/auth/login', () => {
   it('returns 422 on missing fields', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ email: testUser.email });
+      .send({ email: 'login@example.com' });
 
     expect(res.status).toBe(422);
   });
@@ -208,13 +158,6 @@ describe('POST /api/auth/login', () => {
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
 
 describe('GET /api/auth/me', () => {
-  let testUser: any;
-
-  // Ensure JWT secret is set for this test suite
-  beforeAll(() => {
-    process.env.JWT_SECRET = 'integration_test_secret';
-  });
-
   it('returns 401 without a token', async () => {
     const res = await request(app).get('/api/auth/me');
 
@@ -222,23 +165,18 @@ describe('GET /api/auth/me', () => {
   });
 
   it('returns the authenticated user with valid token', async () => {
-    testUser = await TestUserFactory.createUser();
     const registerRes = await request(app)
       .post('/api/auth/register')
-      .send({
-        username: testUser.username,
-        email: testUser.email,
-        password: testUser.password,
-      });
+      .send({ username: 'meuser', email: 'me@example.com', password: 'Password1' });
 
     const token = registerRes.body.data.token;
-    
+
     const res = await request(app)
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.email).toBe(testUser.email);
+    expect(res.body.data.email).toBe('me@example.com');
     expect(res.body.data.password).toBeUndefined();
   });
 
@@ -268,7 +206,7 @@ describe('POST /api/auth/forgot-password', () => {
   it('returns 422 on invalid email format', async () => {
     const res = await request(app)
       .post('/api/auth/forgot-password')
-      .send({ email: TestUserFactory.generateInvalidEmail() });
+      .send({ email: 'not-an-email' });
 
     expect(res.status).toBe(422);
   });
