@@ -20,52 +20,57 @@ export class SentryController {
    */
   async tunnelSentryEvent(req: Request, res: Response): Promise<void> {
     try {
-      // Extract the DSN from the request body to determine project ID
-      // Sentry SDK sends the DSN in the envelope headers
-      const envelope = req.body;
-      if (!envelope || typeof envelope !== 'string') {
+      // express.raw() delivers a Buffer — not a string
+      const bodyBuffer = req.body as Buffer;
+      if (!Buffer.isBuffer(bodyBuffer) || bodyBuffer.length === 0) {
         res.status(400).json({ error: 'Invalid envelope' });
         return;
       }
 
-      // Parse the envelope to get the DSN
-      const lines = envelope.split('\n');
-      const headerLine = lines[0];
+      // Parse only the first line (envelope header) as UTF-8
+      const firstNewline = bodyBuffer.indexOf(0x0a); // '\n'
+      const headerLine = (firstNewline === -1 ? bodyBuffer : bodyBuffer.subarray(0, firstNewline)).toString('utf8');
+
       if (!headerLine) {
         res.status(400).json({ error: 'Missing envelope header' });
         return;
       }
 
-      const header = JSON.parse(headerLine);
+      let header: { dsn?: string };
+      try {
+        header = JSON.parse(headerLine) as { dsn?: string };
+      } catch {
+        res.status(400).json({ error: 'Malformed envelope header' });
+        return;
+      }
+
       const dsn = header.dsn;
       if (!dsn) {
         res.status(400).json({ error: 'Missing DSN in envelope header' });
         return;
       }
 
-      // Extract project ID from DSN
-      // DSN format: https://<key>@<host>/<project-id>
       const dsnUrl = new URL(dsn);
       const projectId = dsnUrl.pathname.replace(/^\//, '');
-      
+
       if (!projectId) {
         res.status(400).json({ error: 'Invalid DSN format' });
         return;
       }
 
-      // Validate projectId against configured value
+      // Validate projectId against configured value — early, before any forwarding
       const allowedProjectId = process.env.SENTRY_PROJECT_ID;
       if (allowedProjectId && projectId !== allowedProjectId) {
-        console.error(`[Sentry Tunnel] Rejected project ID: ${projectId} (allowed: ${allowedProjectId})`);
+        console.error(`[SentryTunnel] Rejected projectId: ${projectId}`);
         res.status(403).json({ error: 'Project ID not allowed' });
         return;
       }
 
-      // Forward to Sentry API using dynamic DSN host
+      // Build URL from parsed DSN host — supports self-hosted Sentry
       const sentryUrl = `${dsnUrl.protocol}//${dsnUrl.host}/api/${projectId}/envelope/`;
       const url = new URL(sentryUrl);
-      
-      // Build headers with explicit allowlist to prevent security leaks
+
+      // Explicit header allowlist — never spread req.headers
       const allowedHeaders = [
         'user-agent',
         'accept',
@@ -74,70 +79,61 @@ export class SentryController {
         'baggage',
         'x-request-id',
       ];
-      
+
       const headers: Record<string, string | number | undefined> = {};
-      
-      // Copy only allowed headers
-      allowedHeaders.forEach(headerName => {
+      allowedHeaders.forEach((headerName) => {
         const value = req.headers[headerName];
-        if (value !== undefined && typeof value === 'string') {
-          headers[headerName] = value;
-        }
+        if (typeof value === 'string') headers[headerName] = value;
       });
-      
-      // Set required headers explicitly
+
       headers['Content-Type'] = 'application/x-sentry-envelope';
-      headers['Content-Length'] = Buffer.byteLength(req.body);
-      // Ensure host is undefined to avoid conflicts
+      headers['Content-Length'] = bodyBuffer.length;
       headers['host'] = undefined;
-      
+
       const options = {
         hostname: url.hostname,
         port: url.port || 443,
         path: url.pathname,
         method: 'POST',
         headers,
-        timeout: 10000, // 10 second timeout
+        timeout: 10000,
       };
 
+      // Single-response guard — prevents both error and timeout from replying
+      let replied = false;
+
       const proxyReq = https.request(options, (proxyRes) => {
-        // Forward Sentry's response back to client
-        res.status(proxyRes.statusCode || 200);
-        
-        // Copy headers
+        if (replied) return;
+        replied = true;
+        res.status(proxyRes.statusCode ?? 200);
         Object.entries(proxyRes.headers).forEach(([key, value]) => {
-          if (value) res.set(key, value);
+          if (value) res.set(key, value as string);
         });
-        
-        // Pipe response body
         proxyRes.pipe(res);
       });
 
       proxyReq.on('error', (error) => {
-        console.error('[Sentry Tunnel] Proxy request error:', error);
+        if (replied) return;
+        replied = true;
+        console.error('[SentryTunnel] Proxy error:', error.message);
+        proxyReq.destroy();
         res.status(502).json({ error: 'Bad gateway' });
       });
 
       proxyReq.on('timeout', () => {
-        console.error('[Sentry Tunnel] Request timeout');
+        if (replied) return;
+        replied = true;
+        console.error('[SentryTunnel] Request timeout');
         proxyReq.destroy();
         res.status(408).json({ error: 'Request timeout' });
       });
 
-      // Send request body
-      proxyReq.write(req.body);
+      // Write raw buffer — preserves binary envelope data
+      proxyReq.write(bodyBuffer);
       proxyReq.end();
     } catch (error) {
-      console.error('[Sentry Tunnel] Error forwarding to Sentry:', error);
-      
-      // Type guard for unknown error
-      if (error instanceof Error) {
-        if (error.message.includes('timeout')) {
-          res.status(408).json({ error: 'Request timeout' });
-        } else {
-          res.status(500).json({ error: 'Internal server error' });
-        }
-      } else {
+      console.error('[SentryTunnel] Unexpected error:', error);
+      if (!res.headersSent) {
         res.status(500).json({ error: 'Internal server error' });
       }
     }

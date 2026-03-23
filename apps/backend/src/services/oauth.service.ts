@@ -124,7 +124,7 @@ const exchangeCodeForTokens = async (
     
     clearTimeout(timeoutId);
   } catch (err) {
-    if ((err as Error).name === "TimeoutError") {
+    if ((err as Error).name === "AbortError") {
       throw new OAuthVerificationError(
         "Google sign-in timed out. Please try again.",
       );
@@ -171,7 +171,7 @@ const verifyIdToken = async (
     
     clearTimeout(timeoutId);
   } catch (err) {
-    if ((err as Error).name === "TimeoutError") {
+    if ((err as Error).name === "AbortError") {
       throw new OAuthVerificationError(
         "Google identity verification timed out. Please try again.",
       );
@@ -384,7 +384,14 @@ export const upsertGoogleUser = async (
 
     // If linking failed, try creating new user
     if ((error as Error).message.includes("Failed to link Google account")) {
-      return await createGoogleUser(userInfo);
+      try {
+        return await createGoogleUser(userInfo);
+      } catch (createError: unknown) {
+        if ((createError as { code?: number }).code === 11000) {
+          return await handleDuplicateKeyError(createError, sub);
+        }
+        throw createError;
+      }
     }
 
     throw error;

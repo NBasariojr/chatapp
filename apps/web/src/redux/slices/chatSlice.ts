@@ -109,7 +109,19 @@ const chatSlice = createSlice({
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
       
-      // Don't update lastMessage for backfill to avoid stale data
+      // Advance room.lastMessage if backfill contains a newer message than what's stored.
+      // Guards against overwriting a live message with stale backfill data.
+      const room = state.rooms.find((r) => r._id === roomId);
+      if (room && state.messages[roomId].length > 0) {
+        const latestBackfill = state.messages[roomId][state.messages[roomId].length - 1];
+        const existingTs = room.lastMessage
+          ? new Date(room.lastMessage.createdAt).getTime()
+          : 0;
+        const backfillTs = new Date(latestBackfill.createdAt).getTime();
+        if (backfillTs > existingTs) {
+          room.lastMessage = latestBackfill;
+        }
+      }
     },
 
     removeMessage(

@@ -62,12 +62,12 @@ const deliverQueuedMessages = async (
     // Fetch all messages sent to user's rooms after they went offline.
     // Limit 100 per reconnect — prevents flooding on long offline periods.
     // The existing compound index { roomId: 1, createdAt: -1 } covers this query.
-    const missed = await Message.find({
+    const missedDesc = await Message.find({
       roomId: { $in: roomIds },
       createdAt: { $gt: user.lastSeen },
       sender: { $ne: userId }, // don't re-deliver the user's own messages
     })
-      .sort({ createdAt: 1 }) // oldest first — correct chronological order
+      .sort({ createdAt: -1 }) // newest first — ensures limit(100) keeps the most recent
       .limit(100)
       .populate('sender', 'username avatar isOnline')
       .populate({
@@ -75,6 +75,9 @@ const deliverQueuedMessages = async (
         select: 'content type sender',
         populate: { path: 'sender', select: 'username' },
       });
+
+    // Reverse to chronological order (oldest → newest) before delivering
+    const missed = missedDesc.reverse();
 
     if (missed.length === 0) return;
 

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { sentryController } from '../controllers/sentry.controller';
 
 const router: Router = Router();
@@ -14,6 +14,6 @@ const router: Router = Router();
  * 
  * This endpoint forwards the envelope to Sentry's API.
  */
-router.post('/sentry-tunnel', require('express').text({ type: '*/*' }), sentryController.tunnelSentryEvent.bind(sentryController));
+router.post('/sentry-tunnel', express.raw({ type: '*/*', limit: '1mb' }), sentryController.tunnelSentryEvent.bind(sentryController));
 
 export default router;
