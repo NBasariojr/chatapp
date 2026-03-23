@@ -4,6 +4,7 @@ import rateLimit, { RateLimitRequestHandler, Options } from 'express-rate-limit'
 import RedisStore from 'rate-limit-redis';
 import { getRedis } from './redis';
 import { Request } from 'express';
+import Command from 'ioredis/built/Command';
 
 // ─── Redis Store Factory ───────────────────────────────────────────────────────
 // Lazily creates a RedisStore backed by the shared ioredis client.
@@ -16,8 +17,10 @@ function createRedisStore(prefix: string): RedisStore | undefined {
     const client = getRedis();
     return new RedisStore({
       // ioredis sendCommand adapter — required by rate-limit-redis v3
-      sendCommand: (...args: string[]) =>
-        client.call(args[0], ...args.slice(1)) as Promise<any>,
+      sendCommand: (...args: string[]): Promise<string | string[]> => {
+        const command = new Command(args[0], args.slice(1));
+        return client.sendCommand(command) as Promise<string | string[]>;
+      },
       prefix,
     });
   } catch {
