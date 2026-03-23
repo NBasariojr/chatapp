@@ -73,7 +73,7 @@ redis: {
     },
     pingTimeout: 60000,
     pingInterval: 25000,
-    maxHttpBufferSize: 1e8, // 100 MB
+    maxHttpBufferSize: 1e6, // 1 MB
   },
 
   // Media Service
