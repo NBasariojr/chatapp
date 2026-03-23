@@ -1,5 +1,5 @@
-import { Router, Request, Response } from 'express';
-import https from 'node:https';
+import { Router } from 'express';
+import { sentryController } from '../controllers/sentry.controller';
 
 const router: Router = Router();
 
@@ -14,97 +14,6 @@ const router: Router = Router();
  * 
  * This endpoint forwards the envelope to Sentry's API.
  */
-router.post('/sentry-tunnel', async (req: Request, res: Response) => {
-  try {
-    // Extract the DSN from the request body to determine project ID
-    // Sentry SDK sends the DSN in the envelope headers
-    const envelope = req.body;
-    if (!envelope || typeof envelope !== 'string') {
-      return res.status(400).json({ error: 'Invalid envelope' });
-    }
-
-    // Parse the envelope to get the DSN
-    const lines = envelope.split('\n');
-    const headerLine = lines[0];
-    if (!headerLine) {
-      return res.status(400).json({ error: 'Missing envelope header' });
-    }
-
-    const header = JSON.parse(headerLine);
-    const dsn = header.dsn;
-    if (!dsn) {
-      return res.status(400).json({ error: 'Missing DSN in envelope header' });
-    }
-
-    // Extract project ID from DSN
-    // DSN format: https://<key>@<host>/<project-id>
-    const dsnUrl = new URL(dsn);
-    const projectId = dsnUrl.pathname.replace(/^\//, '');
-    
-    if (!projectId) {
-      return res.status(400).json({ error: 'Invalid DSN format' });
-    }
-
-    // Forward to Sentry API using Node.js https module
-    const sentryUrl = `https://sentry.io/api/${projectId}/envelope/`;
-    const url = new URL(sentryUrl);
-    
-    const options = {
-      hostname: url.hostname,
-      port: url.port || 443,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-sentry-envelope',
-        'Content-Length': Buffer.byteLength(req.body),
-        ...req.headers,
-        // Remove host header to avoid conflicts
-        host: undefined,
-      },
-      timeout: 10000, // 10 second timeout
-    };
-
-    const proxyReq = https.request(options, (proxyRes) => {
-      // Forward Sentry's response back to client
-      res.status(proxyRes.statusCode || 200);
-      
-      // Copy headers
-      Object.entries(proxyRes.headers).forEach(([key, value]) => {
-        if (value) res.set(key, value);
-      });
-      
-      // Pipe response body
-      proxyRes.pipe(res);
-    });
-
-    proxyReq.on('error', (error) => {
-      console.error('[Sentry Tunnel] Proxy request error:', error);
-      res.status(502).json({ error: 'Bad gateway' });
-    });
-
-    proxyReq.on('timeout', () => {
-      console.error('[Sentry Tunnel] Request timeout');
-      proxyReq.destroy();
-      res.status(408).json({ error: 'Request timeout' });
-    });
-
-    // Send request body
-    proxyReq.write(req.body);
-    proxyReq.end();
-  } catch (error) {
-    console.error('[Sentry Tunnel] Error forwarding to Sentry:', error);
-    
-    // Type guard for unknown error
-    if (error instanceof Error) {
-      if (error.message.includes('timeout')) {
-        res.status(408).json({ error: 'Request timeout' });
-      } else {
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    } else {
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-});
+router.post('/sentry-tunnel', sentryController.tunnelSentryEvent.bind(sentryController));
 
 export default router;
