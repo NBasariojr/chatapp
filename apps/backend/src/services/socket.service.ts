@@ -115,10 +115,14 @@ export const initSocketHandlers = (io: SocketServer): void => {
       return id;
     });
 
-    // Deliver messages missed while offline
-    // Runs after room joins so the socket is in the correct rooms
-    // before any subsequent real-time events arrive
-    await deliverQueuedMessages(socket, userId, roomIds);
+    // Deliver messages missed while offline - run in background
+    // Don't await this to avoid blocking socket handler registration
+    deliverQueuedMessages(socket, userId, roomIds).catch((error) => {
+      captureException(error, {
+        userId,
+        event: 'deliverQueuedMessages',
+      });
+    });
 
     // Handle joining a specific room
     socket.on('room:join', (roomId: string) => {

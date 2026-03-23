@@ -31,7 +31,9 @@ export function initSentry(): void {
     dsn,
     environment,
     release: release ?? `chatapp-web@${APP_VERSION}`, // APP_VERSION injected by Vite
-    tunnel: '/api/sentry-tunnel', // Proxy through backend to avoid ad blockers
+    tunnel: environment === 'production' 
+      ? `${import.meta.env.VITE_API_URL}/api/sentry-tunnel`
+      : '/api/sentry-tunnel', // Proxy through backend to avoid ad blockers
 
     // ─── Performance ───────────────────────────────────────────────────────
     tracesSampleRate: environment === "production" ? 0.1 : 0,

@@ -53,22 +53,50 @@ export class SentryController {
         return;
       }
 
-      // Forward to Sentry API using Node.js https module
-      const sentryUrl = `https://sentry.io/api/${projectId}/envelope/`;
+      // Validate projectId against configured value
+      const allowedProjectId = process.env.SENTRY_PROJECT_ID;
+      if (allowedProjectId && projectId !== allowedProjectId) {
+        console.error(`[Sentry Tunnel] Rejected project ID: ${projectId} (allowed: ${allowedProjectId})`);
+        res.status(403).json({ error: 'Project ID not allowed' });
+        return;
+      }
+
+      // Forward to Sentry API using dynamic DSN host
+      const sentryUrl = `${dsnUrl.protocol}//${dsnUrl.host}/api/${projectId}/envelope/`;
       const url = new URL(sentryUrl);
+      
+      // Build headers with explicit allowlist to prevent security leaks
+      const allowedHeaders = [
+        'user-agent',
+        'accept',
+        'accept-encoding',
+        'sentry-trace',
+        'baggage',
+        'x-request-id',
+      ];
+      
+      const headers: Record<string, string | number | undefined> = {};
+      
+      // Copy only allowed headers
+      allowedHeaders.forEach(headerName => {
+        const value = req.headers[headerName];
+        if (value !== undefined && typeof value === 'string') {
+          headers[headerName] = value;
+        }
+      });
+      
+      // Set required headers explicitly
+      headers['Content-Type'] = 'application/x-sentry-envelope';
+      headers['Content-Length'] = Buffer.byteLength(req.body);
+      // Ensure host is undefined to avoid conflicts
+      headers['host'] = undefined;
       
       const options = {
         hostname: url.hostname,
         port: url.port || 443,
         path: url.pathname,
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-sentry-envelope',
-          'Content-Length': Buffer.byteLength(req.body),
-          ...req.headers,
-          // Remove host header to avoid conflicts
-          host: undefined,
-        },
+        headers,
         timeout: 10000, // 10 second timeout
       };
 

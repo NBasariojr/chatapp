@@ -82,13 +82,13 @@ const checkCodeReplay = async (code: string): Promise<void> => {
 
   try {
     const redis = getRedis();
-    const alreadyUsed = await redis.get(codeKey);
-    if (alreadyUsed) {
+    // Atomic SET with NX and EX to prevent race conditions
+    const result = await redis.set(codeKey, "1", "EX", 300, "NX");
+    if (result !== "OK") {
       throw new OAuthVerificationError(
         "Authorization code has already been used",
       );
     }
-    await redis.setex(codeKey, 300, "1");
   } catch (err) {
     if (err instanceof OAuthVerificationError) throw err;
     console.error(
@@ -106,6 +106,9 @@ const exchangeCodeForTokens = async (
 ): Promise<GoogleTokenExchangeResponse> => {
   let tokenExchangeRes: Response;
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
     tokenExchangeRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -116,8 +119,10 @@ const exchangeCodeForTokens = async (
         redirect_uri: "postmessage",
         grant_type: "authorization_code",
       }).toString(),
-      signal: AbortSignal.timeout(8000),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
   } catch (err) {
     if ((err as Error).name === "TimeoutError") {
       throw new OAuthVerificationError(
@@ -154,12 +159,17 @@ const verifyIdToken = async (
 ): Promise<GoogleIdTokenClaims> => {
   let tokenInfoRes: Response;
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
     tokenInfoRes = await fetch("https://oauth2.googleapis.com/tokeninfo", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ id_token: idToken }).toString(),
-      signal: AbortSignal.timeout(5000),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
   } catch (err) {
     if ((err as Error).name === "TimeoutError") {
       throw new OAuthVerificationError(
@@ -252,7 +262,7 @@ const generateUniqueUsername = async (displayName: string): Promise<string> => {
 const findUserByGoogleId = async (googleId: string): Promise<IUser | null> => {
   return await User.findOneAndUpdate(
     { googleId },
-    { $set: { isOnline: true, lastSeen: new Date() } },
+    { $set: { isOnline: true } },
     { new: true },
   );
 };
@@ -272,7 +282,6 @@ const linkGoogleToEmailAccount = async (
         authProvider: "both",
         isEmailVerified: true,
         isOnline: true,
-        lastSeen: new Date(),
       },
     },
     { new: true },

@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../redux/store';
-import { addMessage, removeMessage, updateMessage, setTyping, updateUserStatus } from '../redux/slices/chatSlice';
+import { addMessage, backfillMessages, removeMessage, updateMessage, setTyping, updateUserStatus } from '../redux/slices/chatSlice';
 import type { Message } from '@chatapp/shared';
 
 // ─── Socket URL resolution ────────────────────────────────────────────────────
@@ -57,14 +57,21 @@ export const connectSocket = (token: string): Socket => {
   });
 
   // ← ADD: receives batch of messages missed while offline
-  // Each message is dispatched individually through the same addMessage path.
-  // The existing dedup guard in chatSlice (alreadyExists check) prevents
-  // duplicates if the same message was already loaded via fetchMessages.
+  // Use backfillMessages to avoid overwriting lastMessage with stale data
   socket.on('messages:queued', (messages: Message[]) => {
-    messages.forEach((message) => {
-      store.dispatch(addMessage({ roomId: message.roomId, message }));
+    // Group messages by roomId for batch processing
+    const messagesByRoom = messages.reduce((acc, message) => {
+      if (!acc[message.roomId]) acc[message.roomId] = [];
+      acc[message.roomId].push(message);
+      return acc;
+    }, {} as Record<string, Message[]>);
+    
+    // Dispatch backfill for each room
+    Object.entries(messagesByRoom).forEach(([roomId, roomMessages]) => {
+      store.dispatch(backfillMessages({ roomId, messages: roomMessages }));
     });
-    console.log(`📬 Received ${messages.length} queued message(s)`);
+    
+    console.log(`📬 Received ${messages.length} queued message(s) across ${Object.keys(messagesByRoom).length} room(s)`);
   });
 
   // ← ADDED: server emits this when someone edits a message

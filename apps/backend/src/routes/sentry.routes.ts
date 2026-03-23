@@ -14,6 +14,6 @@ const router: Router = Router();
  * 
  * This endpoint forwards the envelope to Sentry's API.
  */
-router.post('/sentry-tunnel', sentryController.tunnelSentryEvent.bind(sentryController));
+router.post('/sentry-tunnel', require('express').text({ type: '*/*' }), sentryController.tunnelSentryEvent.bind(sentryController));
 
 export default router;
