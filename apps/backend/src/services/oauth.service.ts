@@ -53,10 +53,8 @@ const RESERVED_USERNAMES = new Set([
   "api",
 ]);
 
-// Step 1 + 2: Exchange Code → Verify id_token
-export const exchangeAndVerifyGoogleCode = async (
-  code: string,
-): Promise<GoogleUserInfo> => {
+// Helper function to validate environment and code
+const validateAuthInputs = (code: string): { clientId: string; clientSecret: string } => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -70,6 +68,11 @@ export const exchangeAndVerifyGoogleCode = async (
     throw new OAuthVerificationError("Invalid authorization code format");
   }
 
+  return { clientId, clientSecret };
+};
+
+// Helper function to check code replay in Redis
+const checkCodeReplay = async (code: string): Promise<void> => {
   const codeHash = crypto
     .createHash("sha256")
     .update(code)
@@ -79,13 +82,13 @@ export const exchangeAndVerifyGoogleCode = async (
 
   try {
     const redis = getRedis();
-    const alreadyUsed = await redis.get(codeKey);
-    if (alreadyUsed) {
+    // Atomic SET with NX and EX to prevent race conditions
+    const result = await redis.set(codeKey, "1", "EX", 300, "NX");
+    if (result !== "OK") {
       throw new OAuthVerificationError(
         "Authorization code has already been used",
       );
     }
-    await redis.setex(codeKey, 300, "1");
   } catch (err) {
     if (err instanceof OAuthVerificationError) throw err;
     console.error(
@@ -93,10 +96,19 @@ export const exchangeAndVerifyGoogleCode = async (
       (err as Error).message,
     );
   }
+};
 
-  // Step 1: Exchange authorization code for tokens
+// Helper function to exchange authorization code for tokens
+const exchangeCodeForTokens = async (
+  code: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<GoogleTokenExchangeResponse> => {
   let tokenExchangeRes: Response;
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
     tokenExchangeRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -107,10 +119,12 @@ export const exchangeAndVerifyGoogleCode = async (
         redirect_uri: "postmessage",
         grant_type: "authorization_code",
       }).toString(),
-      signal: AbortSignal.timeout(8000),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
   } catch (err) {
-    if ((err as Error).name === "TimeoutError") {
+    if ((err as Error).name === "AbortError") {
       throw new OAuthVerificationError(
         "Google sign-in timed out. Please try again.",
       );
@@ -123,7 +137,6 @@ export const exchangeAndVerifyGoogleCode = async (
       error?: string;
       error_description?: string;
     };
-    // Map Google's error codes to user-friendly messages
     const userMessage =
       errorBody.error === "invalid_grant"
         ? "Google sign-in session expired. Please try again."
@@ -137,17 +150,28 @@ export const exchangeAndVerifyGoogleCode = async (
     throw new OAuthVerificationError("Google did not return an identity token");
   }
 
-  // Step 2: Verify id_token via POST tokeninfo
+  return tokens;
+};
+
+// Helper function to verify ID token with Google
+const verifyIdToken = async (
+  idToken: string,
+): Promise<GoogleIdTokenClaims> => {
   let tokenInfoRes: Response;
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
     tokenInfoRes = await fetch("https://oauth2.googleapis.com/tokeninfo", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ id_token: tokens.id_token }).toString(),
-      signal: AbortSignal.timeout(5000),
+      body: new URLSearchParams({ id_token: idToken }).toString(),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
   } catch (err) {
-    if ((err as Error).name === "TimeoutError") {
+    if ((err as Error).name === "AbortError") {
       throw new OAuthVerificationError(
         "Google identity verification timed out. Please try again.",
       );
@@ -161,9 +185,14 @@ export const exchangeAndVerifyGoogleCode = async (
     );
   }
 
-  const claims = (await tokenInfoRes.json()) as GoogleIdTokenClaims;
+  return (await tokenInfoRes.json()) as GoogleIdTokenClaims;
+};
 
-  // Step 3: Validate claims
+// Helper function to validate token claims
+const validateTokenClaims = (
+  claims: GoogleIdTokenClaims,
+  clientId: string,
+): void => {
   const audClaim = claims.aud;
   const audMatch = Array.isArray(audClaim)
     ? audClaim.includes(clientId)
@@ -184,6 +213,18 @@ export const exchangeAndVerifyGoogleCode = async (
   if (Number(claims.exp) < Math.floor(Date.now() / 1000)) {
     throw new OAuthVerificationError("Google identity token has expired");
   }
+};
+
+// Main function - now much simpler
+export const exchangeAndVerifyGoogleCode = async (
+  code: string,
+): Promise<GoogleUserInfo> => {
+  const { clientId, clientSecret } = validateAuthInputs(code);
+  await checkCodeReplay(code);
+  
+  const tokens = await exchangeCodeForTokens(code, clientId, clientSecret);
+  const claims = await verifyIdToken(tokens.id_token);
+  validateTokenClaims(claims, clientId);
 
   return {
     sub: claims.sub,
@@ -197,7 +238,7 @@ export const exchangeAndVerifyGoogleCode = async (
 const generateUniqueUsername = async (displayName: string): Promise<string> => {
   const base =
     displayName
-      .replace(/[^a-zA-Z0-9]/g, "")
+      .replaceAll(/[^a-zA-Z0-9]/g, "")
       .toLowerCase()
       .slice(0, 20) || "user";
 
@@ -217,88 +258,139 @@ const generateUniqueUsername = async (displayName: string): Promise<string> => {
   return `${safeBase}_${Date.now().toString(36)}`;
 };
 
-// User Upsert (Account Linking)
+// Helper function to find existing user by Google ID
+const findUserByGoogleId = async (googleId: string): Promise<IUser | null> => {
+  return await User.findOneAndUpdate(
+    { googleId },
+    { $set: { isOnline: true } },
+    { new: true },
+  );
+};
+
+// Helper function to link Google to existing email account
+const linkGoogleToEmailAccount = async (
+  email: string,
+  googleId: string,
+  name?: string,
+  picture?: string,
+): Promise<IUser> => {
+  const updatedUser = await User.findOneAndUpdate(
+    { email, googleId: null },
+    {
+      $set: {
+        googleId,
+        authProvider: "both",
+        isEmailVerified: true,
+        isOnline: true,
+      },
+    },
+    { new: true },
+  );
+
+  if (!updatedUser) {
+    throw new Error("Failed to link Google account to email");
+  }
+
+  // Update profile if missing
+  const profileUpdates: Record<string, string> = {};
+  if (!updatedUser.displayName && name) profileUpdates.displayName = name;
+  if (!updatedUser.avatar && picture) profileUpdates.avatar = picture;
+
+  if (Object.keys(profileUpdates).length > 0) {
+    return (await User.findByIdAndUpdate(
+      updatedUser._id,
+      { $set: profileUpdates },
+      { new: true },
+    )) as IUser;
+  }
+
+  return updatedUser;
+};
+
+// Helper function to create new Google user
+const createGoogleUser = async (
+  userInfo: GoogleUserInfo,
+): Promise<IUser> => {
+  const { sub, email, name, picture } = userInfo;
+  const username = await generateUniqueUsername(name);
+
+  return await User.create({
+    username,
+    displayName: name,
+    email,
+    googleId: sub,
+    authProvider: "google",
+    isEmailVerified: true,
+    avatar: picture ?? null,
+    isOnline: true,
+    lastSeen: new Date(),
+  });
+};
+
+// Helper function to handle MongoDB duplicate key errors
+const handleDuplicateKeyError = async (
+  error: any,
+  googleId: string,
+): Promise<IUser> => {
+  const mongoError = error as {
+    code?: number;
+    keyPattern?: Record<string, number>;
+  };
+
+  if (mongoError.code !== 11000) {
+    throw error;
+  }
+
+  const keyPattern = mongoError.keyPattern ?? {};
+  const isGoogleIdConflict = "googleId" in keyPattern;
+  const isEmailConflict = "email" in keyPattern;
+
+  if (isGoogleIdConflict) {
+    const existing = await findUserByGoogleId(googleId);
+    if (existing) return existing;
+  }
+
+  if (isEmailConflict) {
+    throw new OAuthVerificationError(
+      "This email address is already associated with a different account. " +
+        "Sign in using your original method.",
+    );
+  }
+
+  throw error;
+};
+
+// User Upsert (Account Linking) - Refactored
 export const upsertGoogleUser = async (
   userInfo: GoogleUserInfo,
 ): Promise<IUser> => {
   const { sub, email, name, picture } = userInfo;
 
   try {
-    // Path 1: Returning Google user
-    const byGoogleId = await User.findOneAndUpdate(
-      { googleId: sub },
-      { $set: { isOnline: true, lastSeen: new Date() } },
-      { new: true },
-    );
-    if (byGoogleId) return byGoogleId;
+    // Path 1: Find existing Google user
+    const existingGoogleUser = await findUserByGoogleId(sub);
+    if (existingGoogleUser) return existingGoogleUser;
 
-    // Path 2: Email match — silent account link
-    const byEmail = await User.findOneAndUpdate(
-      { email, googleId: null },
-      {
-        $set: {
-          googleId: sub,
-          authProvider: "both",
-          isEmailVerified: true,
-          isOnline: true,
-          lastSeen: new Date(),
-        },
-      },
-      { new: true },
-    );
+    // Path 2: Link to existing email account
+    const linkedUser = await linkGoogleToEmailAccount(email, sub, name, picture);
+    return linkedUser;
 
-    if (byEmail) {
-      const profileUpdates: Record<string, string> = {};
-      if (!byEmail.displayName && name) profileUpdates.displayName = name;
-      if (!byEmail.avatar && picture) profileUpdates.avatar = picture;
-
-      if (Object.keys(profileUpdates).length > 0) {
-        return (await User.findByIdAndUpdate(
-          byEmail._id,
-          { $set: profileUpdates },
-          { new: true },
-        )) as IUser;
-      }
-      return byEmail;
+    // Path 3: Create new Google user (handled in catch block for race conditions)
+  } catch (error: unknown) {
+    // Handle duplicate key errors from race conditions
+    if ((error as any).code === 11000) {
+      return await handleDuplicateKeyError(error, sub);
     }
 
-    // Path 3: New Google user
-    const username = await generateUniqueUsername(name);
-    return await User.create({
-      username,
-      displayName: name,
-      email,
-      googleId: sub,
-      authProvider: "google",
-      isEmailVerified: true,
-      avatar: picture ?? null,
-      isOnline: true,
-      lastSeen: new Date(),
-    });
-  } catch (error: unknown) {
-    const mongoError = error as {
-      code?: number;
-      keyPattern?: Record<string, number>;
-    };
-
-    if (mongoError.code === 11000) {
-      const isGoogleIdConflict = "googleId" in (mongoError.keyPattern ?? {});
-      const isEmailConflict = "email" in (mongoError.keyPattern ?? {});
-
-      if (isGoogleIdConflict) {
-        const existing = await User.findOneAndUpdate(
-          { googleId: sub },
-          { $set: { isOnline: true, lastSeen: new Date() } },
-          { new: true },
-        );
-        if (existing) return existing;
-      }
-
-      if (isEmailConflict) {
-        throw new OAuthVerificationError(
-          "This email address is already associated with a different account. " +
-            "Sign in using your original method.",
-        );
+    // If linking failed, try creating new user
+    if ((error as Error).message.includes("Failed to link Google account")) {
+      try {
+        return await createGoogleUser(userInfo);
+      } catch (createError: unknown) {
+        if ((createError as { code?: number }).code === 11000) {
+          return await handleDuplicateKeyError(createError, sub);
+        }
+        throw createError;
       }
     }
 

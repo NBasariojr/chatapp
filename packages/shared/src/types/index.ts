@@ -148,6 +148,23 @@ export interface PaginatedResponse<T> {
   };
 }
 
+// ─── Socket message DTO ───────────────────────────────────────────────────────
+// Scoped to fields actually emitted by the queued-delivery path.
+// Using the full Message type would overstate what the socket sends.
+
+export interface SocketMessage {
+  _id: string;
+  content: string;
+  type: MessageType;
+  status: MessageStatus;
+  sender: Pick<User, '_id' | 'username' | 'avatar' | 'isOnline'>;
+  roomId: string;
+  mediaUrl?: string;
+  replyTo?: ReplyPreview | string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Socket event types ───────────────────────────────────────────────────────
 
 export interface SocketEvents {
@@ -158,6 +175,7 @@ export interface SocketEvents {
     replyTo?: string;
   }) => void;
   'message:received': (message: Message) => void;
+  'messages:queued': (messages: SocketMessage[]) => void;
   'message:read': (payload: { messageId: string; roomId: string }) => void;
 
   // ← ADDED: emitted by server when a message is edited

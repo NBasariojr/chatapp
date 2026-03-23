@@ -40,6 +40,61 @@ const authenticateSocket = async (socket: AuthSocket, next: (err?: Error) => voi
   }
 };
 
+/**
+ * Delivers messages sent to the user's rooms while they were offline.
+ * Uses lastSeen as the cursor — fetches all messages created after that timestamp.
+ * Emits directly to the reconnecting socket only, not the whole room.
+ *
+ * Why MongoDB and not Redis: messages are already persisted in MongoDB.
+ * A separate Redis queue would be a second source of truth with no benefit
+ * at this scale. MongoDB with the existing { roomId, createdAt } index
+ * makes this query fast even with large message histories.
+ */
+const deliverQueuedMessages = async (
+  socket: AuthSocket,
+  userId: string,
+  roomIds: string[],
+): Promise<void> => {
+  try {
+    const user = await User.findById(userId).select('lastSeen');
+    if (!user?.lastSeen || roomIds.length === 0) return;
+
+    // Fetch all messages sent to user's rooms after they went offline.
+    // Limit 100 per reconnect — prevents flooding on long offline periods.
+    // The existing compound index { roomId: 1, createdAt: -1 } covers this query.
+    const missedDesc = await Message.find({
+      roomId: { $in: roomIds },
+      createdAt: { $gt: user.lastSeen },
+      sender: { $ne: userId }, // don't re-deliver the user's own messages
+    })
+      .sort({ createdAt: -1 }) // newest first — ensures limit(100) keeps the most recent
+      .limit(100)
+      .populate('sender', 'username avatar isOnline')
+      .populate({
+        path: 'replyTo',
+        select: 'content type sender',
+        populate: { path: 'sender', select: 'username' },
+      });
+
+    // Reverse to chronological order (oldest → newest) before delivering
+    const missed = missedDesc.reverse();
+
+    if (missed.length === 0) return;
+
+    // Emit as a batch — one event, not N individual message:received events.
+    // Frontend handles dedup via the existing addMessage guard in chatSlice.
+    socket.emit('messages:queued', missed);
+
+    console.log(`📬 Delivered ${missed.length} queued message(s) to user ${userId}`);
+  } catch (error) {
+    captureException(error, {
+      userId,
+      event: 'deliverQueuedMessages',
+    });
+    // Non-fatal — user will see messages on next manual refresh
+  }
+};
+
 export const initSocketHandlers = (io: SocketServer): void => {
   // Auth middleware for all socket connections
   io.use(authenticateSocket);
@@ -57,8 +112,19 @@ export const initSocketHandlers = (io: SocketServer): void => {
 
     // Join user to their rooms
     const rooms = await Room.find({ participants: userId }).select('_id');
-    rooms.forEach((room) => {
-      socket.join(ObjectIdToString(room._id));
+    const roomIds = rooms.map((room) => {
+      const id = ObjectIdToString(room._id);
+      socket.join(id);
+      return id;
+    });
+
+    // Deliver messages missed while offline - run in background
+    // Don't await this to avoid blocking socket handler registration
+    deliverQueuedMessages(socket, userId, roomIds).catch((error) => {
+      captureException(error, {
+        userId,
+        event: 'deliverQueuedMessages',
+      });
     });
 
     // Handle joining a specific room

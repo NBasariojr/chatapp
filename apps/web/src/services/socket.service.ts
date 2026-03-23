@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../redux/store';
-import { addMessage, removeMessage, updateMessage, setTyping, updateUserStatus } from '../redux/slices/chatSlice';
-import type { Message } from '@chatapp/shared';
+import { addMessage, backfillMessages, removeMessage, updateMessage, setTyping, updateUserStatus } from '../redux/slices/chatSlice';
+import type { Message, SocketMessage } from '@chatapp/shared';
 
 // ─── Socket URL resolution ────────────────────────────────────────────────────
 //
@@ -54,6 +54,23 @@ export const connectSocket = (token: string): Socket => {
 
   socket.on('message:received', (message: Message) => {
     store.dispatch(addMessage({ roomId: message.roomId, message }));
+  });
+
+  // ← ADD: receives batch of messages missed while offline
+  // Use backfillMessages to avoid overwriting lastMessage with stale data
+  socket.on('messages:queued', (messages: SocketMessage[]) => {
+    // Group by roomId — one dispatch per room instead of one per message
+    const byRoom = messages.reduce<Record<string, SocketMessage[]>>((acc, msg) => {
+      if (!acc[msg.roomId]) acc[msg.roomId] = [];
+      acc[msg.roomId].push(msg);
+      return acc;
+    }, {});
+
+    Object.entries(byRoom).forEach(([roomId, roomMessages]) => {
+      store.dispatch(backfillMessages({ roomId, messages: roomMessages as Message[] }));
+    });
+
+    console.log(`📬 Received ${messages.length} queued message(s)`);
   });
 
   // ← ADDED: server emits this when someone edits a message

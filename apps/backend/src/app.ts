@@ -8,6 +8,7 @@ import roomRoutes from './routes/room.routes';
 import messageRoutes from './routes/message.routes';
 import mediaRoutes from './routes/media.routes';
 import adminRoutes from './routes/admin.routes';
+import sentryRoutes from './routes/sentry.routes';
 import { errorHandler } from './middlewares/error.middleware';
 import { notFound } from './middlewares/notFound.middleware';
 import { sentryRequestHandler } from './config/sentry';
@@ -125,6 +126,7 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api', sentryRoutes);
 
 // Error Handling
 app.use(notFound);

@@ -79,7 +79,49 @@ const chatSlice = createSlice({
       if (alreadyExists) return;
       state.messages[roomId].push(message);
       const room = state.rooms.find((r) => r._id === roomId);
-      if (room) room.lastMessage = message;
+      if (room) {
+        // Only update lastMessage if incoming message is newer
+        if (!room.lastMessage || new Date(message.createdAt) > new Date(room.lastMessage.createdAt)) {
+          room.lastMessage = message;
+        }
+      }
+    },
+
+    backfillMessages(
+      state,
+      action: PayloadAction<{ roomId: string; messages: Message[] }>,
+    ) {
+      const { roomId, messages } = action.payload;
+      if (!state.messages[roomId]) state.messages[roomId] = [];
+      
+      // Add only messages that don't already exist
+      messages.forEach((message) => {
+        const alreadyExists = state.messages[roomId].some(
+          (m) => m._id === message._id,
+        );
+        if (!alreadyExists) {
+          state.messages[roomId].push(message);
+        }
+      });
+      
+      // Sort messages by creation date
+      state.messages[roomId].sort((a, b) => 
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      
+      // Advance room.lastMessage if backfill contains a newer message than what's stored.
+      // Guards against overwriting a live message with stale backfill data.
+      const room = state.rooms.find((r) => r._id === roomId);
+      if (room && state.messages[roomId].length > 0) {
+        const latestBackfill = state.messages[roomId][state.messages[roomId].length - 1];
+        const existingTs = room.lastMessage
+          ? new Date(room.lastMessage.createdAt).getTime()
+          : 0;
+        const backfillTs = new Date(latestBackfill.createdAt).getTime();
+        if (backfillTs > existingTs) {
+          room.lastMessage = latestBackfill;
+        }
+      }
     },
 
     removeMessage(
@@ -242,6 +284,7 @@ const chatSlice = createSlice({
 export const {
   setActiveRoom,
   addMessage,
+  backfillMessages,
   removeMessage,
   updateMessage,
   setTyping,

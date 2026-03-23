@@ -57,7 +57,7 @@ redis: {
 
   // Adapter clients (pub/sub pair — separate from cache client)
   adapter: {
-    maxRetriesPerRequest: null as null,
+    maxRetriesPerRequest: null,
     enableReadyCheck: false,
     lazyConnect: true,   // ← ADDED
     retryStrategy: (times: number): number | null =>
@@ -73,7 +73,7 @@ redis: {
     },
     pingTimeout: 60000,
     pingInterval: 25000,
-    maxHttpBufferSize: 1e8, // 100 MB
+    maxHttpBufferSize: 1e6, // 1 MB
   },
 
   // Media Service
