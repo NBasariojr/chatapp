@@ -88,12 +88,13 @@ export class SentryController {
 
       headers['Content-Type'] = 'application/x-sentry-envelope';
       headers['Content-Length'] = bodyBuffer.length;
-      headers['host'] = undefined;
+      // Do NOT touch or remove 'host' header here.
+      // Let Node.js set it automatically from the options.hostname
 
       const options = {
         hostname: url.hostname,
         port: url.port || 443,
-        path: url.pathname,
+        path: url.pathname + url.search,
         method: 'POST',
         headers,
         timeout: 10000,
@@ -105,6 +106,11 @@ export class SentryController {
       const proxyReq = https.request(options, (proxyRes) => {
         if (replied) return;
         replied = true;
+
+        if (proxyRes.statusCode && proxyRes.statusCode >= 400) {
+          console.warn(`[SentryTunnel] Sentry responded with ${proxyRes.statusCode} — check DSN/projectId`);
+        }
+
         res.status(proxyRes.statusCode ?? 200);
         Object.entries(proxyRes.headers).forEach(([key, value]) => {
           if (value) res.set(key, value as string);
@@ -116,6 +122,8 @@ export class SentryController {
         if (replied) return;
         replied = true;
         console.error('[SentryTunnel] Proxy error:', error.message);
+        // Optional: log more context
+        console.error('[SentryTunnel] Target URL was:', sentryUrl);
         proxyReq.destroy();
         res.status(502).json({ error: 'Bad gateway' });
       });

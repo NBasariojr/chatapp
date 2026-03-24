@@ -43,11 +43,7 @@ const config: Config = {
   // ts-jest configuration
   transform: {
     '^.+\\.ts$': ['ts-jest', {
-      tsconfig: {
-        // Override — tests don't need declaration files
-        declaration: false,
-        declarationMap: false,
-      },
+      tsconfig: './tsconfig.test.json',
     }],
   },
 
