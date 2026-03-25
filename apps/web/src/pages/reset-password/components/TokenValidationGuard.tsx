@@ -21,14 +21,12 @@ const TokenValidationGuard = ({ token, children }: TokenValidationGuardProps) =>
         const { valid } = await authService.validateResetToken(token);
         if (!cancelled) setStatus(valid ? 'valid' : 'invalid');
       } catch {
-        // Network error or 400 from backend — treat as invalid
         if (!cancelled) setStatus('invalid');
       }
     };
 
     validate();
 
-    // Cleanup prevents setState on an unmounted component
     return () => {
       cancelled = true;
     };

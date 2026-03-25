@@ -76,7 +76,6 @@ const userSchema = new Schema<IUser>(
     friendRequestsReceived: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     googleId: {
       type: String,
-      default: null,
       select: false,
     },
     authProvider: {

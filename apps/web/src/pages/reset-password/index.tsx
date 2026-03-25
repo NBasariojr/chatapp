@@ -29,10 +29,11 @@ const ResetPassword = () => {
   }, [status, navigate]);
 
   // Guard against a missing :token param (shouldn't be reachable via normal navigation)
-  if (!token) {
-    navigate('/forgot-password');
-    return null;
-  }
+  useEffect(() => {
+    if (!token) navigate('/forgot-password', { replace: true });
+  }, [token, navigate]);
+
+  if (!token) return null;
 
   // ─── Success state ──────────────────────────────────────────────────────────
   if (status === 'success') {

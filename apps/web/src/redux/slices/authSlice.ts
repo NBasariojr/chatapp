@@ -110,6 +110,18 @@ export const googleLogin = createAsyncThunk(
   }
 );
 
+export const logoutUser = createAsyncThunk(
+  'auth/logoutUser',
+  async (_, { rejectWithValue }) => {
+    try {
+      await authService.logout();
+    } catch (err: unknown) {
+      // Non-fatal — clear client state regardless
+      return rejectWithValue(err instanceof Error ? err.message : 'Logout failed');
+    }
+  }
+);
+
 // Slice
 const authSlice = createSlice({
   name: 'auth',
@@ -229,6 +241,17 @@ const authSlice = createSlice({
       })
       .addCase(resetPassword.rejected, (state, action) => {
         state.resetPassword = { status: 'error', error: action.payload as string };
+      });
+
+    // logoutUser
+    builder
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.user = null;
+        state.token = null;
+        state.error = null;
+        state.oauthError = null;
+        localStorage.removeItem('chatapp_token');
+        clearSentryUser();
       });
   },
 });

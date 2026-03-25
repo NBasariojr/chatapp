@@ -17,7 +17,14 @@ import { logAuditEvent } from "../services/audit.service";
 
 // Schemas
 const registerSchema = z.object({
-  username: z.string().min(3).max(30),
+  username: z
+    .string()
+    .min(3, "Username must be at least 3 characters")
+    .max(30, "Username cannot exceed 30 characters")
+    .regex(
+      /^\w+$/,
+      "Username can only contain letters, numbers, and underscores"
+    ),
   email: z.string().email(),
   password: z
     .string()
@@ -67,7 +74,12 @@ const generateToken = (
   return jwtLib.sign(
     { id, role, authProvider },
     jwt.secret,
-    { expiresIn: jwt.expiresIn }
+    {
+      expiresIn: jwt.expiresIn,
+      issuer: jwt.issuer,
+      audience: jwt.audience,
+      algorithm: 'HS256',
+    }
   );
 };
 
@@ -91,11 +103,12 @@ export const register = async (
     const { username, email, password } = parsed.data;
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
-      throw new ConflictError(
-        existingUser.email === email
-          ? "Email already in use"
-          : "Username already taken"
-      );
+      if (existingUser.email === email) {
+        throw new ConflictError(
+          "An account with that email already exists. Try signing in instead."
+        );
+      }
+      throw new ConflictError("That username is already taken. Please choose another.");
     }
     const user = await User.create({ username, email, password });
     const token = generateToken(
@@ -139,6 +152,7 @@ export const login = async (
 
     // Google-only account: no password set — give actionable message
     if (user.authProvider === "google" && !user.password) {
+      logAuditEvent({ action: 'auth.login.failure', req, email, metadata: { reason: 'google_only_account' } });
       throw new UnauthorizedError(
         "This account uses Google Sign-In. Please continue with Google."
       );
@@ -156,7 +170,7 @@ export const login = async (
     );
     await User.findByIdAndUpdate(ObjectIdToString(user._id), {
       isOnline: true,
-      lastSeen: new Date(),
+      // lastSeen is set on disconnect only — it is the offline queue cursor (BUG-027)
     });
     await cacheSet(
       `session:${ObjectIdToString(user._id)}`,
@@ -253,7 +267,10 @@ export const forgotPassword = async (
       await User.findByIdAndUpdate(ObjectIdToString(user._id), {
         $unset: { passwordResetToken: "", passwordResetExpires: "" },
       });
-      console.error("[forgotPassword] Email send error:", emailError);
+      console.error(
+        "[forgotPassword] Email delivery failed:",
+        emailError instanceof Error ? emailError.message : "Unknown error"
+      );
       throw new Error("Failed to send reset email. Please try again.");
     }
 

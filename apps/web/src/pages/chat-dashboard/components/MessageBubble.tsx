@@ -175,11 +175,7 @@ const MessageBubble = ({
   };
 
   return (
-    <button
-      className={`flex w-full items-start ${isMe ? "justify-end" : "justify-start"}`}
-      onClick={() => { if (isConfirmingDelete) setConfirmDeleteId(null); }}
-      aria-label={isConfirmingDelete ? "Cancel delete confirmation" : "Message bubble"}
-    >
+    <div className={`flex w-full items-start ${isMe ? "justify-end" : "justify-start"}`}>
       <div className={`flex max-w-[70%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
         {showAvatar && !isMe && (
           <div className="flex-shrink-0 mr-2">
@@ -231,13 +227,23 @@ const MessageBubble = ({
             onDeleteMessage={onDeleteMessage}
           />
 
+          {/* Dismiss delete confirmation when clicking the bubble area */}
+          {isConfirmingDelete && (
+            <button
+              className="absolute inset-0 w-full h-full cursor-default"
+              aria-label="Cancel delete confirmation"
+              onClick={() => setConfirmDeleteId(null)}
+              tabIndex={0}
+            />
+          )}
+
           <div className={`flex items-center space-x-1 mt-1 whitespace-nowrap ${isMe ? "justify-end" : "justify-start"}`}>
             <span className="text-xs text-muted-foreground whitespace-nowrap">{formatTime(message.timestamp)}</span>
             {isMe && <DeliveryStatus message={message} />}
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 };
 
