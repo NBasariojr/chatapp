@@ -4,6 +4,8 @@ import { User } from "../models/user.model";
 import { setSentryUser } from "../config/sentry";
 import { logAuditEvent } from "../services/audit.service";
 import { ObjectIdToString } from "../utils/objectId";
+import { cacheGet } from "../config/redis";
+import { jwt as jwtConfig } from "../config";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -26,10 +28,12 @@ export const authenticate = async (
     }
 
     const token = authHeader.split(" ")[1];
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error("JWT_SECRET is not configured");
 
-    const decoded = jwt.verify(token, secret) as {
+    const decoded = jwt.verify(token, jwtConfig.secret, {
+      issuer: jwtConfig.issuer,
+      audience: jwtConfig.audience,
+      algorithms: ['HS256'],
+    }) as {
       id: string;
       role: string;
       iat: number;
@@ -54,6 +58,16 @@ export const authenticate = async (
         });
         return;
       }
+    }
+
+    // Check if Redis session exists
+    const session = await cacheGet(`session:${ObjectIdToString(user._id)}`);
+    if (!session) {
+      res.status(401).json({
+        success: false,
+        message: "Session expired. Please log in again.",
+      });
+      return;
     }
 
     req.user = { _id: ObjectIdToString(user._id), role: user.role };

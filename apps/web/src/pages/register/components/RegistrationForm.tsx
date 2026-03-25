@@ -64,7 +64,7 @@ const RegistrationForm = ({ onSubmit, isLoading }: RegistrationFormProps) => {
       newErrors.username = "Username is required";
     } else if (formData.username.length < 3) {
       newErrors.username = "Username must be at least 3 characters";
-    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+    } else if (!/^\w+$/.test(formData.username)) {
       newErrors.username = "Username can only contain letters, numbers, and underscores";
     }
 
@@ -74,7 +74,7 @@ const RegistrationForm = ({ onSubmit, isLoading }: RegistrationFormProps) => {
       newErrors.email = "Please enter a valid email address";
     }
 
-    if (!formData.password) {
+    if (formData.password === "") {
       newErrors.password = "Password is required";
     } else {
       const { requirements } = validatePassword(formData.password);
@@ -120,6 +120,7 @@ const RegistrationForm = ({ onSubmit, isLoading }: RegistrationFormProps) => {
         onChange={handleInputChange}
         error={errors.username}
         required
+        autoComplete="username"
       />
 
       <Input
@@ -131,6 +132,7 @@ const RegistrationForm = ({ onSubmit, isLoading }: RegistrationFormProps) => {
         onChange={handleInputChange}
         error={errors.email}
         required
+        autoComplete="email"
       />
 
       {/* Password */}
@@ -146,6 +148,7 @@ const RegistrationForm = ({ onSubmit, isLoading }: RegistrationFormProps) => {
             error={errors.password}
             required
             className="pr-12"
+            autoComplete="new-password"
           />
           <button
             type="button"
@@ -211,6 +214,7 @@ const RegistrationForm = ({ onSubmit, isLoading }: RegistrationFormProps) => {
           error={errors.confirmPassword}
           required
           className="pr-12"
+          autoComplete="new-password"
         />
         <button
           type="button"

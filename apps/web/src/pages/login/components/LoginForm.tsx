@@ -57,30 +57,7 @@ const LoginForm = ({
 
   const validatePassword = (password: string): string | null => {
     if (password.trim() === "") return "Password is required";
-    
-    const requirements = passwordRequirements || { minLength: 6 };
-    
-    if (requirements.minLength && password.length < requirements.minLength) {
-      return `Password must be at least ${requirements.minLength} characters`;
-    }
-
-    if (requirements.requireUppercase && !/[A-Z]/.test(password)) {
-      return "Password must contain at least one uppercase letter";
-    }
-
-    if (requirements.requireLowercase && !/[a-z]/.test(password)) {
-      return "Password must contain at least one lowercase letter";
-    }
-
-    if (requirements.requireNumbers && !/\d/.test(password)) {
-      return "Password must contain at least one number";
-    }
-
-    if (requirements.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-      return "Password must contain at least one special character";
-    }
-
-    return null;
+    return null; // Login form: presence check only, complexity is registration's job
   };
 
   const validateForm = (): boolean => {
@@ -127,6 +104,7 @@ const LoginForm = ({
           error={formErrors.email}
           required
           disabled={isLoading}
+          autoComplete="email"
         />
         <Input
           label="Password"
@@ -138,6 +116,7 @@ const LoginForm = ({
           error={formErrors.password}
           required
           disabled={isLoading}
+          autoComplete="current-password"
         />
       </div>
 

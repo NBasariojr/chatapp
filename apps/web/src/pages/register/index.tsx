@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "redux/store";
@@ -13,7 +13,7 @@ import RegistrationSuccess from "./components/RegistrationSuccess";
 const Register = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { token, isLoading, error } = useSelector(
+  const { token, isLoading, error, user } = useSelector(
     (state: RootState) => state.auth,
   );
 
@@ -31,7 +31,7 @@ const Register = () => {
     };
   }, [dispatch]);
 
-  const handleFormSubmit = async (formData: {
+  const handleFormSubmit = useCallback(async (formData: {
     username: string;
     email: string;
     password: string;
@@ -39,21 +39,20 @@ const Register = () => {
     agreedToTerms: boolean;
   }) => {
     setOauthError("");
-    const result = dispatch(
-      register({
+    try {
+      await dispatch(register({
         username: formData.username,
         email: formData.email,
         password: formData.password,
-      }),
-    );
-
-    if (register.fulfilled.match(result)) {
+      })).unwrap();
       const storedToken = localStorage.getItem("chatapp_token");
       if (storedToken) connectSocket(storedToken);
       setRegisteredEmail(formData.email);
       setStep("success");
+    } catch {
+      // Error is in Redux state.auth.error — displayed in the form
     }
-  };
+  }, [dispatch]);
 
   const handleOAuthSignup = async (provider: string) => {
     setOauthError("");
@@ -63,7 +62,7 @@ const Register = () => {
       const storedToken = localStorage.getItem("chatapp_token");
       if (storedToken) {
         connectSocket(storedToken);
-        setRegisteredEmail("user@gmail.com"); // Will be updated from Google profile
+        setRegisteredEmail(user?.email ?? "your registered email");
         setStep("success");
       }
     }
@@ -74,7 +73,9 @@ const Register = () => {
   };
 
   const handleResendVerification = async () => {
-    alert("Verification email resent. Please check your inbox.");
+    // TODO: Dispatch resend verification email action (Milestone 8)
+    // For now, surface a non-blocking message via Redux ui state
+    console.warn("[Register] Resend verification not yet implemented");
   };
 
   return (

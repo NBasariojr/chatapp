@@ -34,12 +34,17 @@ const Login = () => {
       rememberMe: boolean;
     }) => {
       setOauthError("");
-      await dispatch(
-        login({ email: formData.email, password: formData.password }),
-      ).unwrap();
-      const storedToken = localStorage.getItem("chatapp_token");
-      if (storedToken) connectSocket(storedToken);
-      navigate("/chat-dashboard");
+      try {
+        await dispatch(
+          login({ email: formData.email, password: formData.password }),
+        ).unwrap();
+        const storedToken = localStorage.getItem("chatapp_token");
+        if (storedToken) connectSocket(storedToken);
+        navigate("/chat-dashboard");
+      } catch {
+        // Error is already in Redux state.auth.error — displayed in LoginForm
+        // Do not navigate on failure
+      }
     },
     [navigate, dispatch],
   );

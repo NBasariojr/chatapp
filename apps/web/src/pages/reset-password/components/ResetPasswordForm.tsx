@@ -67,6 +67,7 @@ const ResetPasswordForm = ({ onSubmit, isLoading, error }: ResetPasswordFormProp
               value={field.value}
               onChange={field.onChange}
               onBlur={field.onBlur}
+              autoComplete="new-password"
             />
           )}
         />
@@ -96,6 +97,7 @@ const ResetPasswordForm = ({ onSubmit, isLoading, error }: ResetPasswordFormProp
             value={field.value}
             onChange={field.onChange}
             onBlur={field.onBlur}
+            autoComplete="new-password"
           />
         )}
       />

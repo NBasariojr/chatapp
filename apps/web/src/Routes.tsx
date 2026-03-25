@@ -23,6 +23,9 @@ const UserProfileSettings = lazy(() => import('./pages/user-profile-settings'));
 
 // Google OAuth Client ID
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
+if (!GOOGLE_CLIENT_ID && import.meta.env.DEV) {
+  console.warn('[Routes] VITE_GOOGLE_CLIENT_ID is not set — Google OAuth will fail');
+}
 
 // Minimal spinner shown while a lazy chunk loads.
 // Kept intentionally plain — it appears for <200ms on fast connections.

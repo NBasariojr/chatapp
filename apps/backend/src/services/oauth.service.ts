@@ -91,8 +91,15 @@ const checkCodeReplay = async (code: string): Promise<void> => {
     }
   } catch (err) {
     if (err instanceof OAuthVerificationError) throw err;
-    console.error(
-      "[googleAuth] Redis code-replay check unavailable:",
+    const isProduction = process.env.NODE_ENV === 'production';
+    const strict = process.env.OAUTH_REPLAY_CHECK_REQUIRED === 'true' || isProduction;
+    if (strict) {
+      throw new OAuthVerificationError(
+        "Sign-in temporarily unavailable. Please try again."
+      );
+    }
+    console.warn(
+      "[googleAuth] Redis code-replay check unavailable — dev fallback:",
       (err as Error).message,
     );
   }
@@ -108,7 +115,7 @@ const exchangeCodeForTokens = async (
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
-    
+
     tokenExchangeRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -121,7 +128,7 @@ const exchangeCodeForTokens = async (
       }).toString(),
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
   } catch (err) {
     if ((err as Error).name === "AbortError") {
@@ -161,7 +168,7 @@ const verifyIdToken = async (
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
+
     tokenInfoRes = await fetch("https://oauth2.googleapis.com/tokeninfo", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -327,15 +334,18 @@ const createGoogleUser = async (
   });
 };
 
+// MongoDB error interface
+interface MongoError {
+  code?: number;
+  keyPattern?: Record<string, number>;
+}
+
 // Helper function to handle MongoDB duplicate key errors
 const handleDuplicateKeyError = async (
-  error: any,
+  error: unknown,
   googleId: string,
 ): Promise<IUser> => {
-  const mongoError = error as {
-    code?: number;
-    keyPattern?: Record<string, number>;
-  };
+  const mongoError = error as MongoError;
 
   if (mongoError.code !== 11000) {
     throw error;
